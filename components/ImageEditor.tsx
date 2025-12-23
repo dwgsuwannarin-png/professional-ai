@@ -202,7 +202,7 @@ const TEXTS = {
     standard: 'Standard',
     download: 'Download',
     resolution: 'High Resolution Output Area',
-    mainImagePlaceholder: 'Click to Upload Main Image',
+    mainImagePlaceholder: 'Upload Image / Plan / 3D Model View',
     tools: 'Tools',
     undo: 'Undo',
     redo: 'Redo',
@@ -216,7 +216,7 @@ const TEXTS = {
     inputMode: 'Generation Mode',
     modeStandard: 'Standard',
     mode2D: '2D Plan to Room',
-    mode3D: '3D Plan to Room',
+    mode3D: '3D Model / Sketch',
     dailyQuota: 'Daily Quota',
     quotaLimitReached: 'Daily quota limit reached. Please contact admin.',
     settings: 'Settings',
@@ -254,7 +254,7 @@ const TEXTS = {
     standard: 'มาตรฐาน',
     download: 'ดาวน์โหลด',
     resolution: 'พื้นที่แสดงผลความละเอียดสูง (2K)',
-    mainImagePlaceholder: 'คลิกเพื่ออัพโหลดรูปหลัก',
+    mainImagePlaceholder: 'อัพโหลดรูป / แปลน / ภาพจากโมเดล 3D',
     tools: 'เครื่องมือ',
     undo: 'ย้อนกลับ',
     redo: 'ทำซ้ำ',
@@ -268,7 +268,7 @@ const TEXTS = {
     inputMode: 'โหมดการสร้าง',
     modeStandard: 'ทั่วไป',
     mode2D: 'แปลน 2D เป็นห้อง',
-    mode3D: 'แปลน 3D เป็นห้อง',
+    mode3D: 'โมเดล 3D / สเก็ตช์',
     dailyQuota: 'โควต้าวันนี้',
     quotaLimitReached: 'โควต้าวันนี้หมดแล้ว กรุณาติดต่อแอดมิน',
     settings: 'ตั้งค่า',
@@ -675,8 +675,10 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
              
              fullPrompt += `OUTPUT REQUIREMENT: The final image must perfectly match the layout of the source plan. If the bed is on the left in the plan, it MUST be on the left in the render.\n`;
          } else if (interiorMode === 'from_3d' && mainImage) {
-             // AUTO: STRICT MODE for 3D Sketch
-             fullPrompt = `[TASK: MATERIAL OVERLAY ON LOCKED GEOMETRY]\n`;
+             // AUTO: STRICT MODE for 3D Sketch/Model Screenshot
+             fullPrompt = `[TASK: RENDER 3D MODEL SCREENSHOT TO PHOTOREALISM]\n`;
+             fullPrompt += `INPUT ANALYSIS: The input image is a raw 3D model screenshot (e.g., SketchUp, Revit, Rhino) or a white model.\n`;
+             fullPrompt += `INSTRUCTION: Apply realistic materials, textures, and lighting to the EXISTING geometry. DO NOT change the structure. Turn the 'clay' or 'viewport' look into a high-end photograph. Keep the camera angle exactly the same.\n`;
              fullPrompt += `Strictly preserve the geometry of the input image. Analyze the position of every furniture piece and keep it exactly where it is. Apply realistic textures and lighting only.\n`;
          } else {
              fullPrompt = `Generate a high quality interior design image. `;
