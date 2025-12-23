@@ -42,7 +42,12 @@ import {
   ShieldAlert,
   BatteryWarning,
   Clock,
-  History
+  History,
+  Target,
+  Layers,
+  Wand2,
+  ScanEye,
+  BrainCircuit
 } from 'lucide-react';
 import { UserData } from '../types';
 import { GoogleGenAI } from "@google/genai";
@@ -93,6 +98,7 @@ const transformImage = (base64Str: string, type: 'rotate' | 'flip'): Promise<str
 // --- CONSTANTS ---
 const MODEL_PREMIUM = 'gemini-3-pro-image-preview';
 const MODEL_STANDARD = 'gemini-2.5-flash-image';
+const MODEL_ANALYSIS = 'gemini-2.5-flash-image'; // Using Flash for fast vision analysis
 
 const DEFAULT_NEGATIVE_PROMPT = 'low quality, low resolution, blurry, distorted, watermark, text, signature, bad composition, ugly, geometric imperfections, changing background, changing room layout, changing lighting, distortion';
 
@@ -223,7 +229,9 @@ const TEXTS = {
     quotaExceededMsg: 'Daily Quota Exceeded. Switched to Standard Mode.',
     freeModeLabel: 'Standard Mode',
     proModeLabel: 'Pro Mode',
-    noHistory: 'No history yet'
+    noHistory: 'No history yet',
+    analyzePlan: 'Read Plan',
+    analyzing: 'Reading...'
   },
   TH: {
     exterior: 'ภายนอก',
@@ -273,7 +281,9 @@ const TEXTS = {
     quotaExceededMsg: 'โควต้าวันนี้หมดแล้ว เปลี่ยนเป็นโหมดมาตรฐาน',
     freeModeLabel: 'โหมดมาตรฐาน',
     proModeLabel: 'โหมดโปร',
-    noHistory: 'ยังไม่มีประวัติการสร้าง'
+    noHistory: 'ยังไม่มีประวัติการสร้าง',
+    analyzePlan: 'อ่านแปลนอัจฉริยะ',
+    analyzing: 'กำลังอ่าน...'
   }
 };
 
@@ -319,6 +329,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
   
   // Process State
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [warningMsg, setWarningMsg] = useState('');
@@ -479,6 +490,97 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       }
   };
 
+  // --- ANALYZE PLAN FEATURE ---
+  const handleAnalyzePlan = async () => {
+    if (!mainImage) {
+      setErrorMsg("Please upload a plan image first.");
+      return;
+    }
+    
+    setIsAnalyzing(true);
+    setErrorMsg('');
+    setWarningMsg("Analyzing layout and architectural symbols...");
+
+    try {
+        let activeApiKey = customApiKey;
+        if (!activeApiKey) activeApiKey = process.env.API_KEY || '';
+        
+        if (!activeApiKey || activeApiKey === 'undefined') {
+             try {
+                 const settingsRef = db.collection("settings").doc("global");
+                 const settingsSnap = await settingsRef.get();
+                 if (settingsSnap.exists) {
+                     activeApiKey = settingsSnap.data()?.geminiApiKey;
+                 }
+             } catch (e) { console.error(e); }
+        }
+
+        if (!activeApiKey) throw new Error("API Key configuration error.");
+
+        const genAI = new GoogleGenAI({ apiKey: activeApiKey });
+
+        // --- THE ARCHITECT PROMPT ---
+        const promptText = `
+        [ROLE: Expert Architectural Visualizer & Prompt Engineer]
+        [TASK: Analyze 2D Floor Plan -> Create 3D Render Prompt]
+        
+        Analyze the uploaded floor plan image strictly with high precision regarding architectural symbols.
+        
+        1. **Architectural Symbols Analysis (CRITICAL)**:
+           - **Windows vs Doors**: You must distinguish these carefully.
+             - **Swing Door**: Look for a quarter-circle arc indicating the swing path.
+             - **Window**: Look for a rectangle inside the wall thickness or a simple line closing a gap. If there is NO arc, it is likely a Window.
+             - **Sliding Door**: Look for two overlapping lines or arrows, usually leading to a balcony or outside.
+           
+        2. **Layout & Spatial Mapping**:
+           - Identify the main entrance.
+           - Locate key furniture: Bed, Wardrobe, Desk/Work Zone, Sofa.
+           - **Relative Positions**: Describe elements relative to each other (e.g., "Next to the work zone on the left is a large sliding door", "Opposite the bed is a TV console").
+           
+        3. **Materials & Style**: 
+           - Focus on the overall style '${selectedIntStyle || 'Modern Luxury'}'.
+           - Only use specific codes (like F1/C1) if they are clearly legible; otherwise, infer premium materials suitable for the style (e.g., Wooden floor, Gypsum ceiling).
+           
+        4. **Lighting**: 
+           - Explicitly identify the main source of natural light (usually the sliding door or large window).
+        
+        [OUTPUT FORMAT]:
+        Write a single, highly detailed English prompt for an AI Image Generator. 
+        - Start directly with the scene description: "Eye-level view of a [Style] [Room Type]..."
+        - Describe the position of every element precisely (Right wall, Left wall, Top/Bottom).
+        - Ensure Windows and Doors are correctly described based on the visual symbols defined above.
+        - End with: "8k resolution, photorealistic, cinematic lighting".
+        - Do not include introductory text. Just output the raw prompt.
+        `;
+
+        const parts: any[] = [
+           { text: promptText },
+           { inlineData: { data: mainImage.split(',')[1], mimeType: "image/png" } }
+        ];
+
+        const response = await genAI.models.generateContent({
+            model: MODEL_ANALYSIS, // Using Flash for fast vision analysis
+            contents: { parts }
+        });
+
+        const resultText = response.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (resultText) {
+            setPrompt(resultText.trim());
+            setWarningMsg("Plan analyzed! Please review the prompt below.");
+            setTimeout(() => setWarningMsg(''), 3000);
+        } else {
+            throw new Error("Failed to analyze plan.");
+        }
+
+    } catch (err: any) {
+        console.error(err);
+        setErrorMsg("Analysis failed. Please try again.");
+    } finally {
+        setIsAnalyzing(false);
+    }
+  };
+
   const handleGenerate = async () => {
     setErrorMsg('');
     setWarningMsg('');
@@ -554,16 +656,39 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       if (activeTab === 'interior') {
          const room = ROOM_TYPES.find(r => r.id === selectedRoom);
          const style = INTERIOR_STYLES.find(s => s.id === selectedIntStyle);
+         
          if (interiorMode === 'from_2d' && mainImage) {
-             fullPrompt = `Transform this 2D floor plan into a highly realistic 3D interior perspective view. Extrude the walls, add a ceiling, and render the room from an eye-level human perspective. IMPORTANT: You must strictly adhere to the furniture positions shown in the plan. Do not add new furniture and do not remove existing furniture. Keep the layout exactly as is. Apply realistic materials (flooring, wall paint) and lighting. `;
+             // AUTO: STRICT MODE (CHAIN OF THOUGHT) for 2D Plan
+             fullPrompt = `[ROLE: SENIOR ARCHITECTURAL VISUALIZER]\n`;
+             fullPrompt += `TASK: Convert 2D Floor Plan to 3D Interior. 100% ACCURACY REQUIRED.\n`;
+             
+             // If the user has already analyzed the plan (prompt is filled), prioritize that specific description
+             if (prompt && prompt.length > 50) {
+                 fullPrompt += `[STRICT VISUAL INSTRUCTIONS]:\n${prompt}\n\n`;
+                 fullPrompt += `INSTRUCTION: The above text describes the EXACT layout found in the input image. You MUST follow it for furniture placement, lighting, and materials.\n`;
+             } else {
+                 fullPrompt += `CHAIN OF THOUGHT PROCESS:\n`;
+                 fullPrompt += `1. SCAN INPUT: Identify the exact pixel coordinates of the Bed, Wardrobe, Nightstands, Door, and Windows.\n`;
+                 fullPrompt += `2. GEOMETRY LOCK: Create a rigid 3D bounding box for each furniture item found. DO NOT MOVE THEM. DO NOT ROTATE THEM. DO NOT RESIZE THEM.\n`;
+                 fullPrompt += `3. RENDER: Apply the requested style to these LOCKED coordinates.\n`;
+             }
+             
+             fullPrompt += `OUTPUT REQUIREMENT: The final image must perfectly match the layout of the source plan. If the bed is on the left in the plan, it MUST be on the left in the render.\n`;
          } else if (interiorMode === 'from_3d' && mainImage) {
-             fullPrompt = `Transform this 3D architectural plan/section into a highly realistic interior perspective view. IMPORTANT: You must strictly adhere to the furniture positions shown in the image. Do not add new furniture and do not remove existing furniture. Enhance textures, lighting, and details to make it look like a real photo. `;
+             // AUTO: STRICT MODE for 3D Sketch
+             fullPrompt = `[TASK: MATERIAL OVERLAY ON LOCKED GEOMETRY]\n`;
+             fullPrompt += `Strictly preserve the geometry of the input image. Analyze the position of every furniture piece and keep it exactly where it is. Apply realistic textures and lighting only.\n`;
          } else {
              fullPrompt = `Generate a high quality interior design image. `;
          }
+         
          if (room) fullPrompt += `${room.prompt}. `;
          if (style) fullPrompt += `${style.prompt}. `;
-         if (prompt) fullPrompt += `Additional Details: ${prompt}. `;
+         // Only append prompt again if it wasn't already used as the main instruction above
+         if (!(interiorMode === 'from_2d' && mainImage && prompt && prompt.length > 50)) {
+            if (prompt) fullPrompt += `Additional Details: ${prompt}. `;
+         }
+         
          fullPrompt += `Render Style: ${renderStyleKeyword}. `;
 
       } else if (activeTab === 'plan') {
@@ -596,7 +721,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                    fullPrompt += " [Instruction]: Analyze this image (sketch or plan). Redraw it as a high-quality floor plan in the specified style, maintaining the layout but enhancing clarity and aesthetics.";
               }
           } else if (activeTab === 'interior' && interiorMode !== 'standard') {
-              // Handled above
+              // Handled above in the specific interior mode block
           } else {
               if (additionalCommand) {
                   // User specifically requests an edit
@@ -610,7 +735,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
               } else {
                   // Standard variation/style transfer
                   fullPrompt += " [STRICT CONSTRAINT]: Preserve the original image style, camera angle, composition, and lighting exactly. Do not change the overall look. ";
-                  if (prompt) {
+                  if (prompt && !fullPrompt.includes(prompt)) {
                       fullPrompt += `ACTION: Edit based on: "${prompt}". Keep everything else exactly the same. `;
                   }
               }
@@ -628,7 +753,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       } else if (mainImage) {
          if (activeTab === 'plan') {
          } else if (activeTab === 'interior' && (interiorMode === 'from_2d' || interiorMode === 'from_3d')) {
-             fullPrompt += " [Instruction]: Strictly follow the furniture layout and structure of the provided image.";
+             // Already added Strict/Chain-of-Thought prompts above
          } else {
             fullPrompt += " [Instruction]: You must use the provided image as the strict reference for composition. DO NOT change the style. DO NOT change the overall structure.";
          }
@@ -1000,9 +1125,23 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
           <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-4">
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
-                  {t.mainPrompt}
-                </label>
+                <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
+                      {t.mainPrompt}
+                    </label>
+                    {/* AUTO-ANALYZE BUTTON (Visible if Main Image is present) */}
+                    {mainImage && (activeTab === 'interior' || activeTab === 'plan') && (
+                        <button 
+                            onClick={handleAnalyzePlan}
+                            disabled={isAnalyzing}
+                            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-[10px] font-bold border border-indigo-500/30 transition-all disabled:opacity-50"
+                            title="Auto-generate detailed prompt from image"
+                        >
+                            {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <BrainCircuit className="w-3 h-3" />}
+                            {isAnalyzing ? t.analyzing : t.analyzePlan}
+                        </button>
+                    )}
+                </div>
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
@@ -1098,48 +1237,50 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                 )}
                 
                 {activeTab === 'interior' && (
-                  <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                        <Cuboid className="w-3 h-3" /> {t.inputMode}
-                      </label>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1">
-                        <button
-                          onClick={() => setInteriorMode('standard')}
-                          className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
-                            interiorMode === 'standard'
-                              ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
-                              : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
-                          }`}
-                        >
-                            <ImageIcon className="w-4 h-4" />
-                            <span className="truncate">{t.modeStandard}</span>
-                        </button>
-                        <button
-                          onClick={() => setInteriorMode('from_2d')}
-                          className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
-                            interiorMode === 'from_2d'
-                              ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
-                              : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
-                          }`}
-                        >
-                            <FileText className="w-4 h-4" />
-                            <span className="truncate">{t.mode2D}</span>
-                        </button>
-                        <button
-                          onClick={() => setInteriorMode('from_3d')}
-                          className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
-                            interiorMode === 'from_3d'
-                              ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
-                              : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
-                          }`}
-                        >
-                            <Cuboid className="w-4 h-4" />
-                            <span className="truncate">{t.mode3D}</span>
-                        </button>
-                      </div>
-                  </div>
+                  <>
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                          <Cuboid className="w-3 h-3" /> {t.inputMode}
+                        </label>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                          <button
+                            onClick={() => setInteriorMode('standard')}
+                            className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
+                              interiorMode === 'standard'
+                                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
+                                : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
+                            }`}
+                          >
+                              <ImageIcon className="w-4 h-4" />
+                              <span className="truncate">{t.modeStandard}</span>
+                          </button>
+                          <button
+                            onClick={() => setInteriorMode('from_2d')}
+                            className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
+                              interiorMode === 'from_2d'
+                                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
+                                : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
+                            }`}
+                          >
+                              <FileText className="w-4 h-4" />
+                              <span className="truncate">{t.mode2D}</span>
+                          </button>
+                          <button
+                            onClick={() => setInteriorMode('from_3d')}
+                            className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
+                              interiorMode === 'from_3d'
+                                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
+                                : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
+                            }`}
+                          >
+                              <Cuboid className="w-4 h-4" />
+                              <span className="truncate">{t.mode3D}</span>
+                          </button>
+                        </div>
+                    </div>
+                  </>
                 )}
 
                 <div className="space-y-1.5">
