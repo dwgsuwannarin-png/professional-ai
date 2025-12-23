@@ -969,12 +969,11 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
 
           {/* Mode Tabs */}
           <div className="px-3 py-1 shrink-0">
-            <div className="grid grid-cols-4 gap-1 p-1 bg-gray-950/50 rounded-xl border border-gray-800">
+            <div className="grid grid-cols-3 gap-1 p-1 bg-gray-950/50 rounded-xl border border-gray-800">
               {[
                 { id: 'exterior', label: t.exterior, icon: Home },
                 { id: 'interior', label: t.interior, icon: Box },
-                { id: 'plan', label: t.plan, icon: Layout },
-                { id: 'history', label: t.history, icon: History }
+                { id: 'plan', label: t.plan, icon: Layout }
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -999,279 +998,241 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
 
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-4">
-            
-            {activeTab === 'history' ? (
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                       <History className="w-3 h-3" /> {t.history} ({sessionHistory.length})
-                    </label>
-                    {sessionHistory.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-10 text-gray-600 opacity-50 border-2 border-dashed border-gray-800 rounded-xl">
-                            <History className="w-8 h-8 mb-2" />
-                            <p className="text-xs">{t.noHistory}</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 gap-3">
-                           {sessionHistory.map((item) => (
-                               <div 
-                                  key={item.id} 
-                                  onClick={() => loadFromSessionHistory(item)}
-                                  className="group relative cursor-pointer bg-gray-900 rounded-lg overflow-hidden border border-gray-800 hover:border-indigo-500 transition-all hover:scale-[1.02]"
-                               >
-                                  <img src={item.url} alt="History" className="w-full h-32 object-cover" />
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-end">
-                                      <p className="text-[10px] text-gray-300 line-clamp-2">{item.prompt}</p>
-                                      <p className="text-[9px] text-indigo-400 font-mono mt-0.5">{item.timestamp}</p>
-                                  </div>
-                                  {generatedImage === item.url && (
-                                     <div className="absolute top-2 right-2 bg-indigo-600 text-white p-1 rounded-full shadow-lg">
-                                        <Check className="w-3 h-3" />
-                                     </div>
-                                  )}
-                               </div>
-                           ))}
-                        </div>
-                    )}
-                 </div>
-            ) : (
-             <>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
-                    {t.mainPrompt}
-                  </label>
-                  <textarea
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    className="w-full h-16 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    placeholder={language === 'EN' ? "Additional details..." : "รายละเอียดเพิ่มเติม..."}
-                  />
-                </div>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
+                  {t.mainPrompt}
+                </label>
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  className="w-full h-16 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                  placeholder={language === 'EN' ? "Additional details..." : "รายละเอียดเพิ่มเติม..."}
+                />
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
-                    {t.negativePrompt}
-                  </label>
-                  <textarea
-                    value={additionalCommand}
-                    onChange={(e) => setAdditionalCommand(e.target.value)}
-                    className="w-full h-16 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 outline-none transition-all"
-                    placeholder={language === 'EN' ? "e.g., Make it night time, Add a red car..." : "เช่น เปลี่ยนเป็นกลางคืน, เติมรถสีแดง..."}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
+                  {t.negativePrompt}
+                </label>
+                <textarea
+                  value={additionalCommand}
+                  onChange={(e) => setAdditionalCommand(e.target.value)}
+                  className="w-full h-16 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 outline-none transition-all"
+                  placeholder={language === 'EN' ? "e.g., Make it night time, Add a red car..." : "เช่น เปลี่ยนเป็นกลางคืน, เติมรถสีแดง..."}
+                />
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
-                    {t.refImage}
-                  </label>
-                  <div 
-                    onClick={handleRefUploadClick}
-                    className={`flex flex-col items-center justify-center w-full h-14 border-2 border-dashed rounded-xl cursor-pointer transition-all group relative overflow-hidden ${refImage ? 'border-indigo-500 bg-gray-900' : 'border-gray-700 hover:border-gray-500 hover:bg-gray-800/50'}`}
-                  >
-                    {refImage ? (
-                      <>
-                        <img src={refImage} alt="Reference" className="w-full h-full object-cover opacity-60" />
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Trash2 className="w-5 h-5 text-white drop-shadow-md" />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center">
-                        <Upload className="w-4 h-4 text-gray-600 mb-1" />
-                        <span className="text-[10px] text-gray-500">{t.upload}</span>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
+                  {t.refImage}
+                </label>
+                <div 
+                  onClick={handleRefUploadClick}
+                  className={`flex flex-col items-center justify-center w-full h-14 border-2 border-dashed rounded-xl cursor-pointer transition-all group relative overflow-hidden ${refImage ? 'border-indigo-500 bg-gray-900' : 'border-gray-700 hover:border-gray-500 hover:bg-gray-800/50'}`}
+                >
+                  {refImage ? (
+                    <>
+                      <img src={refImage} alt="Reference" className="w-full h-full object-cover opacity-60" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Trash2 className="w-5 h-5 text-white drop-shadow-md" />
                       </div>
-                    )}
-                    <input ref={refFileInputRef} type="file" className="hidden" accept="image/*" onChange={handleRefFileUpload} onClick={(e) => e.stopPropagation()} />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                    <Brush className="w-3 h-3" /> {t.imageStyle}
-                  </label>
-                  <div className="grid grid-cols-2 gap-1">
-                    {renderStyles.map((style) => (
-                      <button
-                        key={style.id}
-                        onClick={() => setSelectedRenderStyle(selectedRenderStyle === style.id ? '' : style.id)}
-                        className={`h-9 rounded-lg text-[10px] font-medium flex items-center justify-center border transition-all duration-200 ${
-                          selectedRenderStyle === style.id
-                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md'
-                            : 'bg-gray-950 border-gray-800 text-gray-500 hover:bg-gray-800 hover:text-gray-300'
-                        }`}
-                      >
-                        {style.label}
-                      </button>
-                    ))}
-                  </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center">
+                      <Upload className="w-4 h-4 text-gray-600 mb-1" />
+                      <span className="text-[10px] text-gray-500">{t.upload}</span>
+                    </div>
+                  )}
+                  <input ref={refFileInputRef} type="file" className="hidden" accept="image/*" onChange={handleRefFileUpload} onClick={(e) => e.stopPropagation()} />
                 </div>
               </div>
 
-              <div className="space-y-4 pt-3 border-t border-gray-800">
-                  {activeTab === 'interior' && (
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                          <Box className="w-3 h-3" /> {t.roomType}
-                        </label>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1">
-                        {ROOM_TYPES.map((room) => (
-                          <button
-                            key={room.id}
-                            onClick={() => setSelectedRoom(selectedRoom === room.id ? '' : room.id)}
-                            className={`h-9 px-3 rounded-lg text-xs font-medium transition-all border flex items-center gap-2 ${
-                              selectedRoom === room.id
-                                ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-md'
-                                : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700 hover:text-gray-300'
-                            }`}
-                          >
-                            <room.icon className={`w-4 h-4 ${selectedRoom === room.id ? 'text-indigo-400' : 'text-gray-600'}`} />
-                            {language === 'TH' ? room.labelTH : room.labelEN}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {activeTab === 'interior' && (
-                    <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                          <Cuboid className="w-3 h-3" /> {t.inputMode}
-                        </label>
-                        </div>
-                        <div className="grid grid-cols-3 gap-1">
-                          <button
-                            onClick={() => setInteriorMode('standard')}
-                            className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
-                              interiorMode === 'standard'
-                                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
-                                : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
-                            }`}
-                          >
-                              <ImageIcon className="w-4 h-4" />
-                              <span className="truncate">{t.modeStandard}</span>
-                          </button>
-                          <button
-                            onClick={() => setInteriorMode('from_2d')}
-                            className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
-                              interiorMode === 'from_2d'
-                                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
-                                : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
-                            }`}
-                          >
-                              <FileText className="w-4 h-4" />
-                              <span className="truncate">{t.mode2D}</span>
-                          </button>
-                          <button
-                            onClick={() => setInteriorMode('from_3d')}
-                            className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
-                              interiorMode === 'from_3d'
-                                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
-                                : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
-                            }`}
-                          >
-                              <Cuboid className="w-4 h-4" />
-                              <span className="truncate">{t.mode3D}</span>
-                          </button>
-                        </div>
-                    </div>
-                  )}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                  <Brush className="w-3 h-3" /> {t.imageStyle}
+                </label>
+                <div className="grid grid-cols-2 gap-1">
+                  {renderStyles.map((style) => (
+                    <button
+                      key={style.id}
+                      onClick={() => setSelectedRenderStyle(selectedRenderStyle === style.id ? '' : style.id)}
+                      className={`h-9 rounded-lg text-[10px] font-medium flex items-center justify-center border transition-all duration-200 ${
+                        selectedRenderStyle === style.id
+                          ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md'
+                          : 'bg-gray-950 border-gray-800 text-gray-500 hover:bg-gray-800 hover:text-gray-300'
+                      }`}
+                    >
+                      {style.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
 
+            <div className="space-y-4 pt-3 border-t border-gray-800">
+                {activeTab === 'interior' && (
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                        <Palette className="w-3 h-3" /> 
-                        {activeTab === 'interior' ? t.interiorStyle : activeTab === 'plan' ? t.planStyle : activeTab === 'exterior' ? t.archStyle : ''}
-                      </label>
-                      <span className="text-[9px] font-bold bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-2 py-0.5 rounded-full">PRO</span>
-                    </div>
-                    
-                    {activeTab === 'interior' ? (
-                        <div className="grid grid-cols-2 gap-1">
-                          {INTERIOR_STYLES.map((style) => (
-                            <button
-                              key={style.id}
-                              onClick={() => setSelectedIntStyle(selectedIntStyle === style.id ? '' : style.id)}
-                              className={`h-9 px-2 rounded-lg text-xs text-left font-medium transition-all border relative overflow-hidden flex items-center ${
-                                selectedIntStyle === style.id
-                                  ? 'bg-gray-800 text-white border-indigo-500 shadow-md'
-                                  : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700 hover:text-gray-300'
-                              }`}
-                            >
-                              <div className={`absolute left-0 top-0 bottom-0 w-1 ${selectedIntStyle === style.id ? 'bg-indigo-500' : 'bg-transparent'}`}></div>
-                              {language === 'TH' ? style.labelTH : style.labelEN}
-                            </button>
-                          ))}
-                        </div>
-                    ) : activeTab === 'plan' ? (
-                        <div className="grid grid-cols-2 gap-1">
-                          {PLAN_STYLES.map((style) => (
-                            <button
-                              key={style.id}
-                              onClick={() => setSelectedPlanStyle(selectedPlanStyle === style.id ? '' : style.id)}
-                              className={`h-9 px-2 rounded-lg text-xs text-left font-medium transition-all border relative overflow-hidden flex items-center ${
-                                selectedPlanStyle === style.id
-                                  ? 'bg-gray-800 text-white border-indigo-500 shadow-md'
-                                  : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700 hover:text-gray-300'
-                              }`}
-                            >
-                              <div className={`absolute left-0 top-0 bottom-0 w-1 ${selectedPlanStyle === style.id ? 'bg-indigo-500' : 'bg-transparent'}`}></div>
-                              {language === 'TH' ? style.labelTH : style.labelEN}
-                            </button>
-                          ))}
-                        </div>
-                    ) : activeTab === 'exterior' ? (
-                        <div className="grid grid-cols-2 gap-1">
-                          {exteriorStyles.map((style) => (
-                            <button
-                              key={style.id}
-                              onClick={() => setSelectedArchStyle(style.id === selectedArchStyle ? '' : style.id)}
-                              className={`h-9 px-2 rounded-lg text-xs text-left font-medium transition-all border relative overflow-hidden flex items-center ${
-                                selectedArchStyle === style.id
-                                  ? 'bg-gray-800 text-white border-indigo-500 shadow-md'
-                                  : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700 hover:text-gray-300'
-                              }`}
-                            >
-                              <div className={`absolute left-0 top-0 bottom-0 w-1 ${selectedArchStyle === style.id ? 'bg-indigo-500' : 'bg-transparent'}`}></div>
-                              {style.label}
-                            </button>
-                          ))}
-                        </div>
-                    ) : null}
-                  </div>
-
-                  {activeTab === 'exterior' && (
-                    <div className="space-y-1.5 flex-1 flex flex-col">
-                      <div className="flex items-center justify-between shrink-0">
                         <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                          <Mountain className="w-3 h-3" /> {t.scene}
-                        </label>
-                        <span className="text-[9px] font-bold bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-2 py-0.5 rounded-full">NEW</span>
+                        <Box className="w-3 h-3" /> {t.roomType}
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      {ROOM_TYPES.map((room) => (
+                        <button
+                          key={room.id}
+                          onClick={() => setSelectedRoom(selectedRoom === room.id ? '' : room.id)}
+                          className={`h-9 px-3 rounded-lg text-xs font-medium transition-all border flex items-center gap-2 ${
+                            selectedRoom === room.id
+                              ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-md'
+                              : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700 hover:text-gray-300'
+                          }`}
+                        >
+                          <room.icon className={`w-4 h-4 ${selectedRoom === room.id ? 'text-indigo-400' : 'text-gray-600'}`} />
+                          {language === 'TH' ? room.labelTH : room.labelEN}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {activeTab === 'interior' && (
+                  <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                        <Cuboid className="w-3 h-3" /> {t.inputMode}
+                      </label>
                       </div>
-                      
-                      <div className="grid grid-cols-2 gap-1 pb-2">
-                        {EXTERIOR_SCENES.map((scene) => (
+                      <div className="grid grid-cols-3 gap-1">
+                        <button
+                          onClick={() => setInteriorMode('standard')}
+                          className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
+                            interiorMode === 'standard'
+                              ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
+                              : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
+                          }`}
+                        >
+                            <ImageIcon className="w-4 h-4" />
+                            <span className="truncate">{t.modeStandard}</span>
+                        </button>
+                        <button
+                          onClick={() => setInteriorMode('from_2d')}
+                          className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
+                            interiorMode === 'from_2d'
+                              ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
+                              : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
+                          }`}
+                        >
+                            <FileText className="w-4 h-4" />
+                            <span className="truncate">{t.mode2D}</span>
+                        </button>
+                        <button
+                          onClick={() => setInteriorMode('from_3d')}
+                          className={`h-9 px-1 rounded-lg text-[10px] font-medium border flex items-center justify-center gap-2 ${
+                            interiorMode === 'from_3d'
+                              ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
+                              : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700'
+                          }`}
+                        >
+                            <Cuboid className="w-4 h-4" />
+                            <span className="truncate">{t.mode3D}</span>
+                        </button>
+                      </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                      <Palette className="w-3 h-3" /> 
+                      {activeTab === 'interior' ? t.interiorStyle : activeTab === 'plan' ? t.planStyle : activeTab === 'exterior' ? t.archStyle : ''}
+                    </label>
+                    <span className="text-[9px] font-bold bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-2 py-0.5 rounded-full">PRO</span>
+                  </div>
+                  
+                  {activeTab === 'interior' ? (
+                      <div className="grid grid-cols-2 gap-1">
+                        {INTERIOR_STYLES.map((style) => (
                           <button
-                            key={scene.id}
-                            onClick={() => setSelectedScene(scene.id === selectedScene ? '' : scene.id)}
-                            className={`h-9 px-2 rounded-lg text-[10px] text-left font-medium transition-all border relative overflow-hidden flex items-center ${
-                              selectedScene === scene.id
-                                ? 'bg-gray-800 text-white border-emerald-500 shadow-sm'
+                            key={style.id}
+                            onClick={() => setSelectedIntStyle(selectedIntStyle === style.id ? '' : style.id)}
+                            className={`h-9 px-2 rounded-lg text-xs text-left font-medium transition-all border relative overflow-hidden flex items-center ${
+                              selectedIntStyle === style.id
+                                ? 'bg-gray-800 text-white border-indigo-500 shadow-md'
                                 : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700 hover:text-gray-300'
                             }`}
                           >
-                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${selectedScene === scene.id ? 'bg-emerald-500' : 'bg-transparent'}`}></div>
-                            <span className={`pl-1 truncate ${selectedScene === scene.id ? 'text-emerald-300' : ''}`}>{language === 'TH' ? scene.labelTH : scene.labelEN}</span>
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${selectedIntStyle === style.id ? 'bg-indigo-500' : 'bg-transparent'}`}></div>
+                            {language === 'TH' ? style.labelTH : style.labelEN}
                           </button>
                         ))}
                       </div>
+                  ) : activeTab === 'plan' ? (
+                      <div className="grid grid-cols-2 gap-1">
+                        {PLAN_STYLES.map((style) => (
+                          <button
+                            key={style.id}
+                            onClick={() => setSelectedPlanStyle(selectedPlanStyle === style.id ? '' : style.id)}
+                            className={`h-9 px-2 rounded-lg text-xs text-left font-medium transition-all border relative overflow-hidden flex items-center ${
+                              selectedPlanStyle === style.id
+                                ? 'bg-gray-800 text-white border-indigo-500 shadow-md'
+                                : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700 hover:text-gray-300'
+                            }`}
+                          >
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${selectedPlanStyle === style.id ? 'bg-indigo-500' : 'bg-transparent'}`}></div>
+                            {language === 'TH' ? style.labelTH : style.labelEN}
+                          </button>
+                        ))}
+                      </div>
+                  ) : activeTab === 'exterior' ? (
+                      <div className="grid grid-cols-2 gap-1">
+                        {exteriorStyles.map((style) => (
+                          <button
+                            key={style.id}
+                            onClick={() => setSelectedArchStyle(style.id === selectedArchStyle ? '' : style.id)}
+                            className={`h-9 px-2 rounded-lg text-xs text-left font-medium transition-all border relative overflow-hidden flex items-center ${
+                              selectedArchStyle === style.id
+                                ? 'bg-gray-800 text-white border-indigo-500 shadow-md'
+                                : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700 hover:text-gray-300'
+                            }`}
+                          >
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${selectedArchStyle === style.id ? 'bg-indigo-500' : 'bg-transparent'}`}></div>
+                            {style.label}
+                          </button>
+                        ))}
+                      </div>
+                  ) : null}
+                </div>
+
+                {activeTab === 'exterior' && (
+                  <div className="space-y-1.5 flex-1 flex flex-col">
+                    <div className="flex items-center justify-between shrink-0">
+                      <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                        <Mountain className="w-3 h-3" /> {t.scene}
+                      </label>
+                      <span className="text-[9px] font-bold bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-2 py-0.5 rounded-full">NEW</span>
                     </div>
-                  )}
-              </div>
-             </>
-            )}
+                    
+                    <div className="grid grid-cols-2 gap-1 pb-2">
+                      {EXTERIOR_SCENES.map((scene) => (
+                        <button
+                          key={scene.id}
+                          onClick={() => setSelectedScene(scene.id === selectedScene ? '' : scene.id)}
+                          className={`h-9 px-2 rounded-lg text-[10px] text-left font-medium transition-all border relative overflow-hidden flex items-center ${
+                            selectedScene === scene.id
+                              ? 'bg-gray-800 text-white border-emerald-500 shadow-sm'
+                              : 'bg-gray-950 border-gray-800 text-gray-500 hover:border-gray-700 hover:text-gray-300'
+                          }`}
+                        >
+                          <div className={`absolute left-0 top-0 bottom-0 w-1 ${selectedScene === scene.id ? 'bg-emerald-500' : 'bg-transparent'}`}></div>
+                          <span className={`pl-1 truncate ${selectedScene === scene.id ? 'text-emerald-300' : ''}`}>{language === 'TH' ? scene.labelTH : scene.labelEN}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+            </div>
             
             <div className="h-2"></div>
           </div>
