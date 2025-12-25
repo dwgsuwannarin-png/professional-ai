@@ -47,7 +47,8 @@ import {
   Layers,
   Wand2,
   ScanEye,
-  BrainCircuit
+  BrainCircuit,
+  Camera
 } from 'lucide-react';
 import { UserData } from '../types';
 import { GoogleGenAI } from "@google/genai";
@@ -125,7 +126,8 @@ const PLAN_STYLES = [
   { id: 'isometric', labelEN: 'Iso Blue', labelTH: 'โครงสร้างแสงฟ้า', prompt: 'Isometric floor plan, glowing blue structural lines, dark background, bokeh effect (blurred background), depth of field, high contrast, futuristic architectural style.' },
   { id: 'oblique', labelEN: 'Clay 3D', labelTH: '3D ดินปั้น', prompt: '3D clay render style floor plan, isometric oblique view, soft rounded edges, matte finish, cute and playful miniature diorama aesthetic. Use a monochromatic single-tone color palette (shades of white, cream, or soft beige) for the entire structure and furniture. No colorful elements. Soft global illumination, strong ambient occlusion, clean and minimal toy-like appearance.' },
   { id: 'wood_model', labelEN: 'Wood Model', labelTH: 'โมเดลไม้', prompt: 'Isometric view made of light wood and matte white materials, placed on construction blueprints spread on a table. Contains miniature furniture details such as kitchen counters, wooden chairs, and gray sofas. Natural light shines through giving a soft and realistic feel. Shallow depth of field makes the background and other components slightly blurred to emphasize the focus on the room model.' },
-  { id: 'blueprint_grunge', labelEN: 'Blueprint Grunge', labelTH: 'พิมพ์เขียว (Grunge)', prompt: 'Architectural floor plan, top-down view, white lines on dark blue grunge paper texture background, blueprint style, thick walls casting drop shadows for depth, detailed furniture layout including bedroom kitchen and garage, sketched white outline trees surrounding, high contrast, aesthetic architectural presentation, 2D graphic design' }
+  { id: 'blueprint_grunge', labelEN: 'Blueprint Grunge', labelTH: 'พิมพ์เขียว (Grunge)', prompt: 'Architectural floor plan, top-down view, white lines on dark blue grunge paper texture background, blueprint style, thick walls casting drop shadows for depth, detailed furniture layout including bedroom kitchen and garage, sketched white outline trees surrounding, high contrast, aesthetic architectural presentation, 2D graphic design' },
+  { id: 'cream_sketch', labelEN: 'Cream Sketch', labelTH: 'สเก็ตช์ครีม', prompt: 'Isometric architectural drawing. Detailed pencil sketch on cream-colored paper. Combination of line work and color to represent building materials such as wood and concrete. Modern wooden buildings style. Flat roof with gravel garden. High quality architectural visualization.' }
 ];
 
 const EXTERIOR_SCENES = [
@@ -370,6 +372,39 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
 
     return () => unsub();
   }, [user]);
+
+  // --- SKETCHUP INTEGRATION ---
+  useEffect(() => {
+    // Mount global function for SketchUp
+    (window as any).receiveSketchUpImage = (base64Data: string) => {
+        // If the data comes with "data:image...", use it directly, else prepend
+        const prefix = "data:image/jpeg;base64,";
+        const formattedData = base64Data.startsWith("data:image") 
+            ? base64Data 
+            : `${prefix}${base64Data.replace(/^data:image\/.*;base64,/, '')}`;
+
+        setMainImage(formattedData);
+        setGeneratedImage(null); // Clear any previous generation
+        
+        // Reset History
+        setHistory([formattedData]);
+        setHistoryStep(0);
+        
+        // Optional feedback
+        setWarningMsg("Image captured from SketchUp");
+        setTimeout(() => setWarningMsg(''), 3000);
+    };
+
+    return () => {
+        // Cleanup
+        delete (window as any).receiveSketchUpImage;
+    };
+  }, []);
+
+  const handleSketchUpCapture = () => {
+      // Trigger SketchUp action
+      window.location.href = 'skp:capture_trigger';
+  };
 
   // Save custom key to local storage
   const handleSaveCustomKey = () => {
@@ -1484,6 +1519,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                 <ToolButton icon={FlipHorizontal} tooltip={t.flip} onClick={handleFlip} disabled={!generatedImage && !mainImage} />
                 <ToolButton icon={RotateCw} tooltip={t.rotate} onClick={handleRotate} disabled={!generatedImage && !mainImage} />
                 <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                <ToolButton icon={Camera} tooltip="Capture from SketchUp" onClick={handleSketchUpCapture} />
                 <ToolButton icon={ArrowUp} tooltip={t.useAsInput} onClick={handleUseAsInput} disabled={!generatedImage} />
                 <ToolButton icon={RefreshCcw} tooltip={t.reset} onClick={handleReset} />
                 <div className="w-px h-6 bg-transparent mx-2"></div>
