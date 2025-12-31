@@ -48,7 +48,9 @@ import {
   Wand2,
   ScanEye,
   BrainCircuit,
-  Camera
+  Camera,
+  Hammer,
+  Square
 } from 'lucide-react';
 import { UserData } from '../types';
 import { GoogleGenAI } from "@google/genai";
@@ -133,6 +135,14 @@ const PLAN_STYLES = [
   { id: 'iso_realistic', labelEN: 'Iso Realistic', labelTH: 'ไอโซ สมจริง', prompt: 'ISOMETRIC VIEW. A photorealistic top-down architectural visualization of a modern luxury apartment floor plan. High angle view, highly detailed textures, polished concrete floors in living areas, warm oak wood flooring in bedrooms, marble tiles in bathrooms. Realistic furniture placement, soft ambient daylight casting gentle shadows, giving depth to the walls and objects. 8k resolution, octane render, architectural photography style.' }
 ];
 
+const RENOVATION_SCENES = [
+  { id: 'reno_cafe', labelEN: 'Cafe Renovation', labelTH: 'รีโนเวทคาเฟ่', prompt: 'RENOVATION: Transform this old shopfront into a stylish modern cafe. Add a large display window, a stylish awning, and outdoor seating area. Use industrial chic materials like black metal and brickwork.' },
+  { id: 'reno_luxury', labelEN: 'Luxury Residence', labelTH: 'บ้านหรูโมเดิร์น', prompt: 'RENOVATION: Replace the masked building with a high-end modern luxury residence. Use floor-to-ceiling glass walls, sleek concrete and warm wood accents. Preserve the exact environment, neighbors, and trees from the original photo. Match the lighting perfectly.' },
+  { id: 'reno_glass', labelEN: 'Glass Extension', labelTH: 'ต่อเติมห้องกระจก', prompt: 'RENOVATION: Add a modern glass-box extension to the masked area of the building. Use steel frame and large glass panels. Integrate the new structure seamlessly with the existing architecture and environment.' },
+  { id: 'reno_facade', labelEN: 'Facade Redesign', labelTH: 'เปลี่ยนหน้ากากตึก', prompt: 'RENOVATION: Completely redesign the facade of the masked building. Use a contemporary minimalist style with vertical wooden slats and white plaster finishes. Keep the surroundings identical.' },
+  { id: 'reno_retail', labelEN: 'Modern Retail', labelTH: 'ร้านค้าโมเดิร์น', prompt: 'RENOVATION: Transform this old shopfront into a modern flagship retail store architecture, textured raw concrete facade mixed with large floor-to-ceiling glass windows, warm interior lighting glowing from inside, wooden interior furniture visible through glass.' }
+];
+
 const EXTERIOR_SCENES = [
   { id: 'pool_villa', labelEN: 'Pool Villa', labelTH: 'พูลวิลล่า', prompt: 'A wide-angle architectural photograph of a luxurious modern minimalist building, viewed from the far end of its backyard under a bright clear blue sky. Two-story structure, clean white cubic forms, large glass windows. A long rectangular swimming pool with clear turquoise water runs parallel to the building. Manicured green lawn, paved walkway, wooden sun loungers. Mature palm trees and tropical plants, resort-like atmosphere. Bright midday sunlight casting sharp shadows.' },
   { id: 'housing', labelEN: 'Housing Estate 1', labelTH: 'บ้านจัดสรร 1', prompt: 'A vibrant, modern housing estate scene. Features large, majestic transplanted trees with wooden supports (tree crutches) lining the streets and gardens, characteristic of new luxury developments. Lush, deep green manicured lawns. The architecture is modern and fresh. Clean, wide concrete or asphalt roads with no clutter. Bright, sunny atmosphere with blue sky. 8k resolution, highly detailed real estate photography.' },
@@ -193,6 +203,7 @@ const TEXTS = {
     exterior: 'Exterior',
     interior: 'Interior',
     plan: 'Plan',
+    renovate: 'Renovate',
     history: 'History',
     mainPrompt: 'Description (Optional)',
     negativePrompt: 'Additional Command / Edit', 
@@ -245,6 +256,7 @@ const TEXTS = {
     exterior: 'ภายนอก',
     interior: 'ภายใน',
     plan: 'แปลน',
+    renovate: 'ต่อเติม',
     history: 'ประวัติ',
     mainPrompt: 'คำอธิบาย (ไม่บังคับ)',
     negativePrompt: 'คำสั่งเพิ่มเติม / แก้ไข', 
@@ -298,7 +310,7 @@ const TEXTS = {
 export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBackToAdmin }) => {
   // UI State
   const [language, setLanguage] = useState<'EN' | 'TH'>('TH');
-  const [activeTab, setActiveTab] = useState<'exterior'|'interior'|'plan'|'history'>('exterior');
+  const [activeTab, setActiveTab] = useState<'exterior'|'interior'|'plan'|'renovate'|'history'>('exterior');
   const [showSettings, setShowSettings] = useState(false);
   
   // Generation Mode State
@@ -348,6 +360,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
   // Refs
   const refFileInputRef = useRef<HTMLInputElement>(null);
   const mainFileInputRef = useRef<HTMLInputElement>(null);
+  const cancelGenRef = useRef(false);
 
   const t = TEXTS[language];
 
@@ -623,6 +636,16 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
   };
 
   const handleGenerate = async () => {
+    // 1. CANCEL LOGIC
+    if (isGenerating) {
+        cancelGenRef.current = true;
+        setIsGenerating(false);
+        setWarningMsg(language === 'TH' ? 'ยกเลิกการสร้างแล้ว' : 'Generation cancelled');
+        return;
+    }
+
+    // 2. START LOGIC
+    cancelGenRef.current = false;
     setErrorMsg('');
     setWarningMsg('');
     
@@ -689,6 +712,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
         return;
       }
 
+      if (cancelGenRef.current) return;
+
       const genAI = new GoogleGenAI({ apiKey: activeApiKey }); 
       
       let fullPrompt = "";
@@ -741,6 +766,29 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
          if (prompt) fullPrompt += `Description: ${prompt}. `;
          fullPrompt += `Render Style: ${renderStyleKeyword}. `;
 
+      } else if (activeTab === 'renovate') {
+         fullPrompt = `[TASK: ARCHITECTURAL RENOVATION & EXTENSION]\n`;
+         fullPrompt += `INPUT ANALYSIS: Analyze the provided image (existing structure, perspective, lighting).\n`;
+         
+         let renovationInstruction = prompt;
+         if (selectedScene) {
+             const sceneObj = RENOVATION_SCENES.find(s => s.id === selectedScene);
+             if (sceneObj) {
+                 renovationInstruction = sceneObj.prompt;
+                 // If user added extra details, append them
+                 if (prompt && prompt.trim() !== '') {
+                     renovationInstruction += ` Additional details: ${prompt}`;
+                 }
+             }
+         }
+         
+         fullPrompt += `RENOVATION INSTRUCTION: ${renovationInstruction}\n`;
+         fullPrompt += `STRICT CONSTRAINTS:\n`;
+         fullPrompt += `1. PRESERVE PERSPECTIVE: The camera angle and perspective MUST remain identical to the original image.\n`;
+         fullPrompt += `2. SEAMLESS BLENDING: The new elements (extension/renovation) must match the lighting, shadows, and texture quality of the existing structure.\n`;
+         fullPrompt += `3. STRUCTURAL INTEGRITY: Do not distort the existing building unless explicitly asked to modify it.\n`;
+         fullPrompt += `Render Style: ${renderStyleKeyword}. Photorealistic 8K.`;
+
       } else {
          fullPrompt = `Generate a high quality image of exterior view. `;
          if (selectedScene) {
@@ -765,6 +813,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
               }
           } else if (activeTab === 'interior' && interiorMode !== 'standard') {
               // Handled above in the specific interior mode block
+          } else if (activeTab === 'renovate') {
+              // Handled above in renovation block
           } else {
               if (additionalCommand) {
                   // User specifically requests an edit
@@ -795,6 +845,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
          fullPrompt += " [Instruction]: Use the first image as the main structural base. Use the second image as a reference for style. Blend the aesthetic of the second image into the first image.";
       } else if (mainImage) {
          if (activeTab === 'plan') {
+         } else if (activeTab === 'renovate') {
          } else if (activeTab === 'interior' && (interiorMode === 'from_2d' || interiorMode === 'from_3d')) {
              // Already added Strict/Chain-of-Thought prompts above
          } else {
@@ -815,14 +866,24 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       // Check specific configs for models
       const generateConfig: any = { };
       if (shouldUsePremium) {
-           generateConfig.imageConfig = { imageSize: '2K', aspectRatio: '16:9' };
+           const imageConfig: any = { imageSize: '2K' };
+           // Only enforce 16:9 if there is NO main image (Text-to-Image)
+           // If Main Image exists (Image-to-Image / Editing), we omit aspectRatio to preserve input ratio
+           if (!mainImage) {
+               imageConfig.aspectRatio = '16:9';
+           }
+           generateConfig.imageConfig = imageConfig;
       }
+
+      if (cancelGenRef.current) return;
 
       const response = await genAI.models.generateContent({
         model: modelName,
         contents: { parts },
         config: generateConfig
       });
+
+      if (cancelGenRef.current) return;
 
       const candidate = response.candidates?.[0];
       let foundImage = false;
@@ -850,6 +911,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       }
 
     } catch (err: any) {
+      if (cancelGenRef.current) return; // Ignore errors if cancelled
+
       console.error(err);
       if (err.message && err.message.includes("Requested entity was not found")) {
          setErrorMsg("System API Key Issue. Please contact admin.");
@@ -859,7 +922,9 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
          setErrorMsg(err.message || "Failed to generate image.");
       }
     } finally {
-      setIsGenerating(false);
+      if (!cancelGenRef.current) {
+         setIsGenerating(false);
+      }
     }
   };
 
@@ -1137,11 +1202,12 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
 
           {/* Mode Tabs */}
           <div className="px-3 py-1 shrink-0">
-            <div className="grid grid-cols-3 gap-1 p-1 bg-gray-950/50 rounded-xl border border-gray-800">
+            <div className="grid grid-cols-4 gap-1 p-1 bg-gray-950/50 rounded-xl border border-gray-800">
               {[
                 { id: 'exterior', label: t.exterior, icon: Home },
                 { id: 'interior', label: t.interior, icon: Box },
-                { id: 'plan', label: t.plan, icon: Layout }
+                { id: 'plan', label: t.plan, icon: Layout },
+                { id: 'renovate', label: t.renovate, icon: Hammer }
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -1188,22 +1254,24 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  className="w-full h-16 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full h-24 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                   placeholder={language === 'EN' ? "Additional details..." : "รายละเอียดเพิ่มเติม..."}
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
-                  {t.negativePrompt}
-                </label>
-                <textarea
-                  value={additionalCommand}
-                  onChange={(e) => setAdditionalCommand(e.target.value)}
-                  className="w-full h-16 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 outline-none transition-all"
-                  placeholder={language === 'EN' ? "e.g., Make it night time, Add a red car..." : "เช่น เปลี่ยนเป็นกลางคืน, เติมรถสีแดง..."}
-                />
-              </div>
+              {activeTab !== 'plan' && activeTab !== 'renovate' && (
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
+                    {t.negativePrompt}
+                  </label>
+                  <textarea
+                    value={additionalCommand}
+                    onChange={(e) => setAdditionalCommand(e.target.value)}
+                    className="w-full h-16 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 outline-none transition-all"
+                    placeholder={language === 'EN' ? "e.g., Make it night time, Add a red car..." : "เช่น เปลี่ยนเป็นกลางคืน, เติมรถสีแดง..."}
+                  />
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
@@ -1326,6 +1394,20 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                   </>
                 )}
 
+                {activeTab === 'plan' && (
+                  <div className="space-y-1.5 mb-3">
+                     <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                        <PenTool className="w-3 h-3" /> {language === 'TH' ? 'คำสั่งต่อเติม / แก้ไข' : 'Extension / Edit Command'}
+                     </label>
+                     <textarea
+                        value={additionalCommand}
+                        onChange={(e) => setAdditionalCommand(e.target.value)}
+                        className="w-full h-20 bg-gray-950 border border-indigo-900/50 rounded-xl p-3 text-sm text-gray-200 placeholder-indigo-500/30 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                        placeholder={language === 'TH' ? "ระบุส่วนที่ต้องการต่อเติม..." : "Describe extension..."}
+                     />
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
@@ -1389,7 +1471,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                   ) : null}
                 </div>
 
-                {activeTab === 'exterior' && (
+                {(activeTab === 'exterior' || activeTab === 'renovate') && (
                   <div className="space-y-1.5 flex-1 flex flex-col">
                     <div className="flex items-center justify-between shrink-0">
                       <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
@@ -1399,7 +1481,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                     </div>
                     
                     <div className="grid grid-cols-2 gap-1 pb-2">
-                      {EXTERIOR_SCENES.map((scene) => (
+                      {(activeTab === 'exterior' ? EXTERIOR_SCENES : RENOVATION_SCENES).map((scene) => (
                         <button
                           key={scene.id}
                           onClick={() => setSelectedScene(scene.id === selectedScene ? '' : scene.id)}
@@ -1437,15 +1519,19 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
 
             <button 
               onClick={handleGenerate}
-              disabled={isGenerating || activeTab === 'history'}
-              className="w-full font-bold py-3 rounded-xl shadow-lg transition-all transform active:scale-[0.98] border relative overflow-hidden group disabled:opacity-70 disabled:cursor-not-allowed bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white border-indigo-400/20 shadow-indigo-900/40"
+              disabled={!isGenerating && activeTab === 'history'}
+              className={`w-full font-bold py-3 rounded-xl shadow-lg transition-all transform active:scale-[0.98] border relative overflow-hidden group disabled:opacity-70 disabled:cursor-not-allowed ${
+                  isGenerating 
+                  ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border-red-400/20 shadow-red-900/40'
+                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 border-indigo-400/20 shadow-indigo-900/40'
+              } text-white`}
             >
               <div className={`absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 blur-xl`}></div>
               <span className="relative flex items-center justify-center gap-2 tracking-wide">
                 {isGenerating ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t.generating}
+                    <Square className="w-4 h-4 fill-white" />
+                    {language === 'TH' ? 'ยกเลิก' : 'STOP'}
                   </>
                 ) : (
                   <>
