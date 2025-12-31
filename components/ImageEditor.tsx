@@ -1974,26 +1974,26 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
               )}
 
               {/* TEXT OVERLAY LAYER */}
-              {(mainImage || generatedImage) && texts.map((t) => (
+              {(mainImage || generatedImage) && texts.map((textItem) => (
                   <div
-                      key={t.id}
-                      className={`absolute z-40 cursor-move select-none group/text ${selectedTextId === t.id ? 'ring-2 ring-indigo-500 rounded p-1' : ''}`}
+                      key={textItem.id}
+                      className={`absolute z-40 cursor-move select-none group/text ${selectedTextId === textItem.id ? 'ring-2 ring-indigo-500 rounded p-1' : ''}`}
                       style={{
-                          left: `${t.x}%`,
-                          top: `${t.y}%`,
+                          left: `${textItem.x}%`,
+                          top: `${textItem.y}%`,
                           transform: 'translate(-50%, -50%)',
                           display: isDrawMode ? 'none' : 'block' // Hide text while drawing mask
                       }}
                       onMouseDown={(e) => {
                           e.stopPropagation();
-                          setSelectedTextId(t.id);
+                          setSelectedTextId(textItem.id);
                           setIsDraggingText(true);
                           
                           // Simple Drag Logic
                           const startX = e.clientX;
                           const startY = e.clientY;
-                          const startLeft = t.x;
-                          const startTop = t.y;
+                          const startLeft = textItem.x;
+                          const startTop = textItem.y;
                           const rect = imageContainerRef.current?.querySelector('img')?.getBoundingClientRect();
                           if (!rect) return;
 
@@ -2003,7 +2003,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                               const deltaXPercent = (dx / rect.width) * 100;
                               const deltaYPercent = (dy / rect.height) * 100;
                               
-                              handleUpdateText(t.id, {
+                              handleUpdateText(textItem.id, {
                                   x: Math.max(0, Math.min(100, startLeft + deltaXPercent)),
                                   y: Math.max(0, Math.min(100, startTop + deltaYPercent))
                               });
@@ -2017,17 +2017,17 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                           window.addEventListener('mouseup', onMouseUp);
                       }}
                   >
-                      {selectedTextId === t.id ? (
+                      {selectedTextId === textItem.id ? (
                           <input 
                               type="text"
-                              value={t.text}
-                              onChange={(e) => handleUpdateText(t.id, { text: e.target.value })}
+                              value={textItem.text}
+                              onChange={(e) => handleUpdateText(textItem.id, { text: e.target.value })}
                               className="bg-transparent border-none outline-none text-center min-w-[50px] p-0 m-0 w-auto whitespace-pre placeholder-gray-400"
                               style={{ 
-                                  color: t.color, 
-                                  fontSize: `${t.fontSize}px`, 
+                                  color: textItem.color, 
+                                  fontSize: `${textItem.fontSize}px`, 
                                   fontWeight: 'bold', 
-                                  fontFamily: `"${t.fontFamily}", "Sarabun", sans-serif`,
+                                  fontFamily: `"${textItem.fontFamily}", "Sarabun", sans-serif`,
                                   textShadow: '0 2px 4px rgba(255,255,255,0.5)'
                               }}
                               autoFocus
@@ -2037,14 +2037,14 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                       ) : (
                           <span 
                             style={{ 
-                                color: t.color, 
-                                fontSize: `${t.fontSize}px`, 
+                                color: textItem.color, 
+                                fontSize: `${textItem.fontSize}px`, 
                                 fontWeight: 'bold', 
-                                fontFamily: `"${t.fontFamily}", "Sarabun", sans-serif`,
+                                fontFamily: `"${textItem.fontFamily}", "Sarabun", sans-serif`,
                                 textShadow: '0 2px 4px rgba(255,255,255,0.5)'
                             }}
                           >
-                              {t.text || (isTextMode ? '' : '')}
+                              {textItem.text || (isTextMode ? '' : '')}
                           </span>
                       )}
                   </div>
