@@ -51,7 +51,8 @@ import {
   Camera,
   Hammer,
   Square,
-  Hourglass
+  Hourglass,
+  Sprout
 } from 'lucide-react';
 import { UserData } from '../types';
 import { GoogleGenAI } from "@google/genai";
@@ -140,10 +141,22 @@ const RENOVATION_SCENES = [
   { id: 'reno_cafe', labelEN: 'Cafe Renovation', labelTH: 'รีโนเวทคาเฟ่', prompt: 'RENOVATION: Transform this old shopfront into a stylish modern cafe. Add a large display window, a stylish awning, and outdoor seating area. Use industrial chic materials like black metal and brickwork.' },
   { id: 'reno_luxury', labelEN: 'Luxury Residence', labelTH: 'บ้านหรูโมเดิร์น', prompt: 'RENOVATION: Replace the masked building with a high-end modern luxury residence. Use floor-to-ceiling glass walls, sleek concrete and warm wood accents. Preserve the exact environment, neighbors, and trees from the original photo. Match the lighting perfectly.' },
   { id: 'reno_glass', labelEN: 'Glass Extension', labelTH: 'ต่อเติมห้องกระจก', prompt: 'RENOVATION: Add a modern glass-box extension to the masked area of the building. Use steel frame and large glass panels. Integrate the new structure seamlessly with the existing architecture and environment.' },
+  { id: 'reno_texture_modern', labelEN: 'Modern Mixed Mat.', labelTH: 'โมเดิร์นผสมวัสดุ', prompt: 'RENOVATION: Frontal architectural photography of a contemporary residential house. The design features a striking mix of materials: rough board-formed gray concrete wall on the left, warm vertical teak wood siding at the entrance, and a prominent black vertical steel slat structure above the door. A large solid wooden pivot door serves as the focal point. Floating concrete steps lead to the entrance. Front planters are empty or filled with dark river stones, no plants. Clean lines, geometric composition, soft overcast daylight.' },
   { id: 'reno_facade', labelEN: 'Facade Redesign', labelTH: 'เปลี่ยนหน้ากากตึก', prompt: 'RENOVATION: Completely redesign the facade of the masked building. Use a contemporary minimalist style with vertical wooden slats and white plaster finishes. Keep the surroundings identical.' },
   { id: 'reno_retail', labelEN: 'Modern Retail', labelTH: 'ร้านค้าโมเดิร์น', prompt: 'RENOVATION: Transform this old shopfront into a modern flagship retail store architecture, textured raw concrete facade mixed with large floor-to-ceiling glass windows, warm interior lighting glowing from inside, wooden interior furniture visible through glass.' },
   { id: 'reno_industrial', labelEN: 'Industrial Luxury', labelTH: 'อินดัสเทรียลหรู', prompt: 'RENOVATION: Transform the building into a modern industrial luxury house. Raw textured concrete facade, weathered wood cladding accents, large black metal-framed glass windows, warm interior lighting glowing from inside, polished concrete entrance path, wabi-sabi aesthetic, overcast sky, soft cinematic lighting, photorealistic, 8k, architectural visualization.' },
   { id: 'reno_shophouse_minimal', labelEN: 'Minimal Shophouse', labelTH: 'ตึกแถวมินิมอล', prompt: 'RENOVATION: Exterior facade renovation of a two-story shophouse, minimalist modern design, white smooth plaster walls with light oak wood cladding accents, large floor-to-ceiling glass windows with thin black steel frames, clean lines, airy atmosphere, minimalist entrance, modern roof structure, minimalist interior living space with white linen sofas, light wood furniture, indoor plants, and sheer white curtains, bright natural daylight, photorealistic, 8k resolution, architectural photography, clear blue sky background.' }
+];
+
+const LANDSCAPE_SCENES = [
+  { id: 'landscape_lush', labelEN: 'Lush Modern Garden', labelTH: 'สวนโมเดิร์นร่มรื่น', prompt: 'A photorealistic shot of a lush modern landscape garden. The foreground features a manicured rolling green lawn with large natural grey boulders and rounded sculpted shrubs. Tall trees with slender trunks frame the scene, casting dappled sunlight and soft shadows on the grass. In the background, a modern minimalist concrete and glass structure with a dark outdoor sofa on a terrace. Serene atmosphere, high-end architectural photography, natural lighting, depth of field, 8k resolution' },
+  { id: 'landscape_curved_path', labelEN: 'Contemporary Curve', labelTH: 'สวนทางเดินโค้ง', prompt: 'A contemporary landscape garden featuring a winding curved walkway made of two-tone grey and white terrazzo, meandering through lush greenery, flanked by low curved beige concrete retaining walls, diverse planting textures including large-leaf hostas, rosemary bushes, ferns, and horsetail reeds, young trees supported by wooden tripod stakes, modern bollard garden lights, soft overcast daylight, high-angle shot highlighting the fluid path layout, modern building facade in background, photorealistic 8k.' },
+  { id: 'landscape_urban_jungle', labelEN: 'Urban Jungle', labelTH: 'สวนป่ากลางเมือง', prompt: 'A photorealistic shot of an Urban Jungle style front garden, lush and dense greenery. A light grey concrete walkway is flanked by clusters of large-leaved tropical plants arranged in layers, featuring giant Monstera, tall Birds of Paradise, feathery palms, and patterned ground cover like Calathea Zebrina. Dappled natural sunlight filters through, creating a refreshing private forest atmosphere. Dense lush green background. 8k resolution, photorealistic.' },
+  { id: 'landscape_mediterranean', labelEN: 'Modern Mediterranean', labelTH: 'สวนเมดิเตอร์เรเนียน', prompt: 'Luxury modern Mediterranean landscape, grand limestone staircase leading up a terraced garden, flanked by tall Italian Cypress trees and ancient Olive trees with silvery foliage, pathway with grass joints (stepping stones), soft ornamental feather grasses (Stipa) mixed with low boxwood hedges and succulents, warm beige stone retaining walls, modern villa facade with stone cladding on the left, sunny daylight, blue sky, architectural visualization, 8k, photorealistic.' },
+  { id: 'landscape_zen', labelEN: 'Japanese Zen Garden', labelTH: 'สวนญี่ปุ่นเซน', prompt: 'Architectural photography of a tranquil Japanese zen courtyard garden. The ground is covered in white raked gravel with intricate wave patterns, interspersed with lush green moss islands and large natural boulders. A large, sculptural Japanese maple tree with vibrant green leaves is the centerpiece, alongside manicured pine bonsai. Features include a granite water basin (tsukubai) with a bamboo spout, and a low stone table with a traditional tea set. The backdrop is a minimalist modern house with expansive floor-to-ceiling glass sliding doors and white walls. Soft, diffused natural daylight, serene atmosphere, 8k resolution.' },
+  { id: 'landscape_modern_mix', labelEN: 'Modern Mixed Garden', labelTH: 'สวนหินผสมดอกไม้', prompt: 'A photorealistic view of the modern two-story house with its white and grey siding, dark tiled roof, and black framed windows and doors. The plain ground in front is now beautifully landscaped with the natural garden scene. Large, tan landscape boulders are nestled among clusters of vibrant purple lavender, white alyssum, and feathery ornamental grasses. A winding path of irregular flagstone pavers and crushed gravel leads towards the house entrance. The garden extends across the foreground and sides, integrating with the base of the house and porch. The clear blue sky remains above.' },
+  { id: 'landscape_rustic_creek', labelEN: 'Rustic Creek', labelTH: 'สวนลำธารธรรมชาติ', prompt: 'Rustic natural backyard garden style. Features a winding clear cool stream with banks decorated with stacked natural stone slabs. A walkway paved with large free-form flagstones crosses the stream and winds along the water edge. Dense lush greenery consisting of large-leaved Hostas, ferns, and various green ground cover plants under the shade of spreading large trees. Dappled sunlight filters through the leaves. Serene and shady atmosphere. Photorealistic, 8k resolution.' },
+  { id: 'landscape_tropical_patio', labelEN: 'Modern Tropical Patio', labelTH: 'ลานพักผ่อนทรอปิคอล', prompt: 'Luxury modern tropical garden patio, outdoor living space. Flooring design mixes dark grey cobblestone pavers with rectangular concrete stepping stones set in black river pebbles. Teak wood lounge chairs with grey cushions and a wooden serving trolley. Manicured round boxwood shrubs and low ground cover plants. A large sculptural tree with artistic twisting branches provides shade. Black bowl-shaped fire pits, garden bollard lights, modern house glass facade in background, warm evening atmosphere, architectural photography, 8k.' }
 ];
 
 const EXTERIOR_SCENES = [
@@ -207,6 +220,7 @@ const TEXTS = {
     interior: 'Interior',
     plan: 'Plan',
     renovate: 'Renovate',
+    landscape: 'Landscape',
     history: 'History',
     mainPrompt: 'Description (Optional)',
     negativePrompt: 'Additional Command / Edit', 
@@ -260,6 +274,7 @@ const TEXTS = {
     interior: 'ภายใน',
     plan: 'แปลน',
     renovate: 'ต่อเติม',
+    landscape: 'จัดสวน',
     history: 'ประวัติ',
     mainPrompt: 'คำอธิบาย (ไม่บังคับ)',
     negativePrompt: 'คำสั่งเพิ่มเติม / แก้ไข', 
@@ -313,7 +328,7 @@ const TEXTS = {
 export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBackToAdmin }) => {
   // UI State
   const [language, setLanguage] = useState<'EN' | 'TH'>('TH');
-  const [activeTab, setActiveTab] = useState<'exterior'|'interior'|'plan'|'renovate'|'history'>('exterior');
+  const [activeTab, setActiveTab] = useState<'exterior'|'interior'|'plan'|'renovate'|'landscape'|'history'>('exterior');
   const [showSettings, setShowSettings] = useState(false);
   
   // Generation Mode State
@@ -792,6 +807,27 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
          fullPrompt += `3. STRUCTURAL INTEGRITY: Do not distort the existing building unless explicitly asked to modify it.\n`;
          fullPrompt += `Render Style: ${renderStyleKeyword}. Photorealistic 8K.`;
 
+      } else if (activeTab === 'landscape') {
+         fullPrompt = `[TASK: LANDSCAPE DESIGN & GARDENING]\n`;
+         fullPrompt += `INPUT ANALYSIS: Identify the building structure and protect it. Identify the ground/garden area.\n`;
+         
+         let landscapeInstruction = prompt;
+         if (selectedScene) {
+             const sceneObj = LANDSCAPE_SCENES.find(s => s.id === selectedScene);
+             if (sceneObj) {
+                 landscapeInstruction = sceneObj.prompt;
+                 if (prompt && prompt.trim() !== '') {
+                     landscapeInstruction += ` Additional details: ${prompt}`;
+                 }
+             }
+         }
+         
+         fullPrompt += `LANDSCAPE INSTRUCTION: ${landscapeInstruction}\n`;
+         fullPrompt += `STRICT CONSTRAINTS:\n`;
+         fullPrompt += `1. PRESERVE ARCHITECTURE: Do NOT change the house building, walls, roof, or structure. Only change the garden/ground/plants.\n`;
+         fullPrompt += `2. REALISTIC PLANTING: Use photorealistic textures for grass, gravel, and plants.\n`;
+         fullPrompt += `Render Style: ${renderStyleKeyword}. Photorealistic 8K.`;
+
       } else {
          fullPrompt = `Generate a high quality image of exterior view. `;
          if (selectedScene) {
@@ -816,8 +852,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
               }
           } else if (activeTab === 'interior' && interiorMode !== 'standard') {
               // Handled above in the specific interior mode block
-          } else if (activeTab === 'renovate') {
-              // Handled above in renovation block
+          } else if (activeTab === 'renovate' || activeTab === 'landscape') {
+              // Handled above
           } else {
               if (additionalCommand) {
                   // User specifically requests an edit
@@ -848,7 +884,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
          fullPrompt += " [Instruction]: Use the first image as the main structural base. Use the second image as a reference for style. Blend the aesthetic of the second image into the first image.";
       } else if (mainImage) {
          if (activeTab === 'plan') {
-         } else if (activeTab === 'renovate') {
+         } else if (activeTab === 'renovate' || activeTab === 'landscape') {
          } else if (activeTab === 'interior' && (interiorMode === 'from_2d' || interiorMode === 'from_3d')) {
              // Already added Strict/Chain-of-Thought prompts above
          } else {
@@ -1205,17 +1241,18 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
 
           {/* Mode Tabs */}
           <div className="px-3 py-1 shrink-0">
-            <div className="grid grid-cols-4 gap-1 p-1 bg-gray-950/50 rounded-xl border border-gray-800">
+            <div className="grid grid-cols-5 gap-1 p-1 bg-gray-950/50 rounded-xl border border-gray-800">
               {[
                 { id: 'exterior', label: t.exterior, icon: Home },
                 { id: 'interior', label: t.interior, icon: Box },
                 { id: 'plan', label: t.plan, icon: Layout },
-                { id: 'renovate', label: t.renovate, icon: Hammer }
+                { id: 'renovate', label: t.renovate, icon: Hammer },
+                { id: 'landscape', label: t.landscape, icon: Sprout }
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`relative flex items-center justify-center gap-1 h-9 rounded-lg text-[10px] font-bold transition-all duration-300 overflow-hidden group ${
+                  className={`relative flex items-center justify-center gap-1 h-9 rounded-lg text-[9px] font-bold transition-all duration-300 overflow-hidden group ${
                     activeTab === tab.id 
                       ? 'text-white shadow-md' 
                       : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
@@ -1474,7 +1511,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                   ) : null}
                 </div>
 
-                {(activeTab === 'exterior' || activeTab === 'renovate') && (
+                {(activeTab === 'exterior' || activeTab === 'renovate' || activeTab === 'landscape') && (
                   <div className="space-y-1.5 flex-1 flex flex-col">
                     <div className="flex items-center justify-between shrink-0">
                       <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
@@ -1484,7 +1521,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                     </div>
                     
                     <div className="grid grid-cols-2 gap-1 pb-2">
-                      {(activeTab === 'exterior' ? EXTERIOR_SCENES : RENOVATION_SCENES).map((scene) => (
+                      {(activeTab === 'exterior' ? EXTERIOR_SCENES : activeTab === 'landscape' ? LANDSCAPE_SCENES : RENOVATION_SCENES).map((scene) => (
                         <button
                           key={scene.id}
                           onClick={() => setSelectedScene(scene.id === selectedScene ? '' : scene.id)}
