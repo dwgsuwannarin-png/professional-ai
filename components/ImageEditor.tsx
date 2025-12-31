@@ -696,9 +696,18 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
             return;
         }
 
+      // ------------------------------------------------------------------
+      // AUTO-CHAINING LOGIC: Determine Active Input Image
+      // ------------------------------------------------------------------
+      let activeInputImage = mainImage;
+      if (generatedImage && additionalCommand) {
+          // If we have a previous result AND the user wants to add a command/edit,
+          // use the previous result as the input for continuous editing.
+          activeInputImage = generatedImage;
+      }
     
       // 3. Validation
-      if (activeTab === 'exterior' && !prompt && !selectedArchStyle && !selectedScene && !mainImage && !refImage) {
+      if (activeTab === 'exterior' && !prompt && !selectedArchStyle && !selectedScene && !activeInputImage && !refImage) {
         setErrorMsg(t.alertPrompt);
         setIsGenerating(false);
         return;
@@ -715,7 +724,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
          const room = ROOM_TYPES.find(r => r.id === selectedRoom);
          const style = INTERIOR_STYLES.find(s => s.id === selectedIntStyle);
          
-         if (interiorMode === 'from_2d' && mainImage) {
+         if (interiorMode === 'from_2d' && activeInputImage) {
              // AUTO: STRICT MODE (CHAIN OF THOUGHT) for 2D Plan
              fullPrompt = `[ROLE: SENIOR ARCHITECTURAL VISUALIZER]\n`;
              fullPrompt += `TASK: Convert 2D Floor Plan to 3D Interior. 100% ACCURACY REQUIRED.\n`;
@@ -732,7 +741,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
              }
              
              fullPrompt += `OUTPUT REQUIREMENT: The final image must perfectly match the layout of the source plan. If the bed is on the left in the plan, it MUST be on the left in the render.\n`;
-         } else if (interiorMode === 'from_3d' && mainImage) {
+         } else if (interiorMode === 'from_3d' && activeInputImage) {
              // AUTO: STRICT MODE for 3D Sketch/Model Screenshot
              fullPrompt = `[TASK: RENDER 3D MODEL SCREENSHOT TO PHOTOREALISM]\n`;
              fullPrompt += `INPUT ANALYSIS: The input image is a raw 3D model screenshot (e.g., SketchUp, Revit, Rhino) or a white model.\n`;
@@ -745,7 +754,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
          if (room) fullPrompt += `${room.prompt}. `;
          if (style) fullPrompt += `${style.prompt}. `;
          // Only append prompt again if it wasn't already used as the main instruction above
-         if (!(interiorMode === 'from_2d' && mainImage && prompt && prompt.length > 50)) {
+         if (!(interiorMode === 'from_2d' && activeInputImage && prompt && prompt.length > 50)) {
             if (prompt) fullPrompt += `Additional Details: ${prompt}. `;
          }
          
@@ -824,7 +833,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
          fullPrompt += `Render Style: ${renderStyleKeyword}. `;
       }
 
-      if (mainImage) {
+      // GLOBAL IMAGE HANDLING & EDITING LOGIC
+      if (activeInputImage) {
           if (activeTab === 'plan') {
               if (selectedPlanStyle === 'iso_structure') {
                    fullPrompt += " [Instruction]: STRICT CONVERSION. Convert this 2D plan into a 3D Isometric view. You MUST preserve the exact wall layout, proportions, and furniture placement of the source image. Do not change the design. Only change the perspective to 3D Isometric.";
@@ -834,17 +844,18 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
           } else if (activeTab === 'interior' && interiorMode !== 'standard') {
               // Handled above in the specific interior mode block
           } else if (activeTab === 'renovate' || activeTab === 'landscape') {
-              // Handled above
+              // Handled above in specific blocks, effectively edits
           } else {
               if (additionalCommand) {
                   // User specifically requests an edit
-                  fullPrompt += `\n[CRITICAL INSTRUCTION: INPAINTING MODE]`;
+                  fullPrompt += `\n[CRITICAL INSTRUCTION: PRECISE EDITING MODE]`;
+                  fullPrompt += `\nTASK: Apply the user command to the provided input image.`;
                   fullPrompt += `\nUSER COMMAND: "${additionalCommand}"`;
-                  fullPrompt += `\n\nRULES:`;
-                  fullPrompt += `\n1. FROZEN BACKGROUND: Do NOT change the room layout, walls, floor, ceiling, or existing furniture. The scene must remain EXACTLY the same.`;
-                  fullPrompt += `\n2. INSERTION ONLY: Only add/modify the object specified in the command.`;
+                  fullPrompt += `\n\nSTRICT CONSTRAINTS (DO NOT IGNORE):`;
+                  fullPrompt += `\n1. FROZEN BACKGROUND: Do NOT change the camera angle, lighting, room layout, walls, floor, ceiling, or existing furniture. The scene must remain EXACTLY the same.`;
+                  fullPrompt += `\n2. TARGETED EDIT ONLY: Only add or modify the specific object or area mentioned in the command.`;
                   fullPrompt += `\n3. STYLE MATCHING: The new object must match the lighting, perspective, and style of the original image.`;
-                  fullPrompt += `\n4. NO RE-IMAGINING: This is an EDIT, not a new generation.`;
+                  fullPrompt += `\n4. NO RE-IMAGINING: This is an EDIT, not a new generation. Do not hallucinate new details outside the command.`;
               } else {
                   // Standard variation/style transfer
                   fullPrompt += " [STRICT CONSTRAINT]: Preserve the original image style, camera angle, composition, and lighting exactly. Do not change the overall look. ";
@@ -861,9 +872,10 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       
       fullPrompt += `Exclude: ${DEFAULT_NEGATIVE_PROMPT}.`;
       
-      if (mainImage && refImage) {
+      // REFERENCE IMAGE HANDLING (Style Transfer)
+      if (activeInputImage && refImage) {
          fullPrompt += " [Instruction]: Use the first image as the main structural base. Use the second image as a reference for style. Blend the aesthetic of the second image into the first image.";
-      } else if (mainImage) {
+      } else if (activeInputImage) {
          if (activeTab === 'plan') {
          } else if (activeTab === 'renovate' || activeTab === 'landscape') {
          } else if (activeTab === 'interior' && (interiorMode === 'from_2d' || interiorMode === 'from_3d')) {
@@ -876,8 +888,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       }
 
       const parts: any[] = [{ text: fullPrompt }];
-      if (mainImage) {
-         parts.push({ inlineData: { data: mainImage.split(',')[1], mimeType: "image/png" } });
+      if (activeInputImage) {
+         parts.push({ inlineData: { data: activeInputImage.split(',')[1], mimeType: "image/png" } });
       }
       if (refImage) {
          parts.push({ inlineData: { data: refImage.split(',')[1], mimeType: "image/png" } });
@@ -887,9 +899,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       const generateConfig: any = { };
       if (shouldUsePremium) {
            const imageConfig: any = { imageSize: '2K' };
-           // Only enforce 16:9 if there is NO main image (Text-to-Image)
-           // If Main Image exists (Image-to-Image / Editing), we omit aspectRatio to preserve input ratio
-           if (!mainImage) {
+           // Only enforce 16:9 if there is NO active input image (Text-to-Image)
+           if (!activeInputImage) {
                imageConfig.aspectRatio = '16:9';
            }
            generateConfig.imageConfig = imageConfig;
