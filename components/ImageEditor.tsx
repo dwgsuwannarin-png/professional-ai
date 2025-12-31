@@ -522,10 +522,10 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       reader.onloadend = () => {
           const res = reader.result as string;
           setMainImage(res);
-          if (!generatedImage) {
-             setHistory([res]);
-             setHistoryStep(0);
-          }
+          // Always reset generation when new file is uploaded
+          setGeneratedImage(null);
+          setHistory([res]);
+          setHistoryStep(0);
       };
       reader.readAsDataURL(file);
     }
@@ -790,6 +790,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
          fullPrompt = `Generate a high quality architectural floor plan. `;
          if (planStyle) fullPrompt += `${planStyle.prompt}. `;
          if (prompt) fullPrompt += `Description: ${prompt}. `;
+         if (additionalCommand) fullPrompt += `Additional Instructions: ${additionalCommand}. `;
          fullPrompt += `Render Style: ${renderStyleKeyword}. `;
 
       } else if (activeTab === 'renovate') {
@@ -806,6 +807,9 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                      renovationInstruction += ` Additional details: ${prompt}`;
                  }
              }
+         }
+         if (additionalCommand) {
+             renovationInstruction += ` [EDIT COMMAND]: ${additionalCommand}`;
          }
          
          fullPrompt += `RENOVATION INSTRUCTION: ${renovationInstruction}\n`;
@@ -828,6 +832,9 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                      landscapeInstruction += ` Additional details: ${prompt}`;
                  }
              }
+         }
+         if (additionalCommand) {
+             landscapeInstruction += ` [EDIT COMMAND]: ${additionalCommand}`;
          }
          
          fullPrompt += `LANDSCAPE INSTRUCTION: ${landscapeInstruction}\n`;
@@ -1307,19 +1314,17 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                 />
               </div>
 
-              {activeTab !== 'plan' && activeTab !== 'renovate' && (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
-                    {t.negativePrompt}
-                  </label>
-                  <textarea
-                    value={additionalCommand}
-                    onChange={(e) => setAdditionalCommand(e.target.value)}
-                    className="w-full h-16 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 outline-none transition-all"
-                    placeholder={language === 'EN' ? "e.g., Make it night time, Add a red car..." : "เช่น เปลี่ยนเป็นกลางคืน, เติมรถสีแดง..."}
-                  />
-                </div>
-              )}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
+                  {t.negativePrompt}
+                </label>
+                <textarea
+                  value={additionalCommand}
+                  onChange={(e) => setAdditionalCommand(e.target.value)}
+                  className="w-full h-16 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 outline-none transition-all"
+                  placeholder={language === 'EN' ? "e.g., Make it night time, Add a red car..." : "เช่น เปลี่ยนเป็นกลางคืน, เติมรถสีแดง..."}
+                />
+              </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">
@@ -1440,20 +1445,6 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                         </div>
                     </div>
                   </>
-                )}
-
-                {activeTab === 'plan' && (
-                  <div className="space-y-1.5 mb-3">
-                     <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                        <PenTool className="w-3 h-3" /> {language === 'TH' ? 'คำสั่งต่อเติม / แก้ไข' : 'Extension / Edit Command'}
-                     </label>
-                     <textarea
-                        value={additionalCommand}
-                        onChange={(e) => setAdditionalCommand(e.target.value)}
-                        className="w-full h-20 bg-gray-950 border border-indigo-900/50 rounded-xl p-3 text-sm text-gray-200 placeholder-indigo-500/30 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                        placeholder={language === 'TH' ? "ระบุส่วนที่ต้องการต่อเติม..." : "Describe extension..."}
-                     />
-                  </div>
                 )}
 
                 <div className="space-y-1.5">
@@ -1670,6 +1661,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
 
           <div className="h-20 bg-gray-900 border-t border-gray-800 px-8 flex items-center justify-center relative z-20 shrink-0">
              <div className="flex items-center gap-2 bg-gray-800/80 backdrop-blur-md p-2 rounded-2xl border border-gray-700/50 shadow-xl">
+                <ToolButton icon={Upload} tooltip={language === 'TH' ? 'อัพโหลดรูป' : 'Upload Image'} onClick={() => mainFileInputRef.current?.click()} />
+                <div className="w-px h-6 bg-gray-700 mx-1"></div>
                 <ToolButton icon={Undo2} tooltip={t.undo} onClick={handleUndo} disabled={historyStep <= 0} />
                 <ToolButton icon={Redo2} tooltip={t.redo} onClick={handleRedo} disabled={historyStep >= history.length - 1} />
                 <div className="w-px h-6 bg-gray-700 mx-1"></div>
