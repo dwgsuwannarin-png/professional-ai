@@ -48,7 +48,6 @@ import {
   Wand2,
   ScanEye,
   BrainCircuit,
-  Camera,
   Hammer,
   Square,
   Hourglass,
@@ -414,39 +413,6 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
 
     return () => unsub();
   }, [user]);
-
-  // --- SKETCHUP INTEGRATION ---
-  useEffect(() => {
-    // Mount global function for SketchUp
-    (window as any).receiveSketchUpImage = (base64Data: string) => {
-        // If the data comes with "data:image...", use it directly, else prepend
-        const prefix = "data:image/jpeg;base64,";
-        const formattedData = base64Data.startsWith("data:image") 
-            ? base64Data 
-            : `${prefix}${base64Data.replace(/^data:image\/.*;base64,/, '')}`;
-
-        setMainImage(formattedData);
-        setGeneratedImage(null); // Clear any previous generation
-        
-        // Reset History
-        setHistory([formattedData]);
-        setHistoryStep(0);
-        
-        // Optional feedback
-        setWarningMsg("Image captured from SketchUp");
-        setTimeout(() => setWarningMsg(''), 3000);
-    };
-
-    return () => {
-        // Cleanup
-        delete (window as any).receiveSketchUpImage;
-    };
-  }, []);
-
-  const handleSketchUpCapture = () => {
-      // Trigger SketchUp action
-      window.location.href = 'skp:capture_trigger';
-  };
 
   // Save custom key to local storage
   const handleSaveCustomKey = () => {
@@ -1669,7 +1635,6 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                 <ToolButton icon={FlipHorizontal} tooltip={t.flip} onClick={handleFlip} disabled={!generatedImage && !mainImage} />
                 <ToolButton icon={RotateCw} tooltip={t.rotate} onClick={handleRotate} disabled={!generatedImage && !mainImage} />
                 <div className="w-px h-6 bg-gray-700 mx-1"></div>
-                <ToolButton icon={Camera} tooltip="Capture from SketchUp" onClick={handleSketchUpCapture} />
                 <ToolButton icon={ArrowUp} tooltip={t.useAsInput} onClick={handleUseAsInput} disabled={!generatedImage} />
                 <ToolButton icon={RefreshCcw} tooltip={t.reset} onClick={handleReset} />
                 <div className="w-px h-6 bg-transparent mx-2"></div>
