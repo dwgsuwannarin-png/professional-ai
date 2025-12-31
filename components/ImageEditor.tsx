@@ -50,7 +50,8 @@ import {
   BrainCircuit,
   Camera,
   Hammer,
-  Square
+  Square,
+  Hourglass
 } from 'lucide-react';
 import { UserData } from '../types';
 import { GoogleGenAI } from "@google/genai";
@@ -140,7 +141,9 @@ const RENOVATION_SCENES = [
   { id: 'reno_luxury', labelEN: 'Luxury Residence', labelTH: 'บ้านหรูโมเดิร์น', prompt: 'RENOVATION: Replace the masked building with a high-end modern luxury residence. Use floor-to-ceiling glass walls, sleek concrete and warm wood accents. Preserve the exact environment, neighbors, and trees from the original photo. Match the lighting perfectly.' },
   { id: 'reno_glass', labelEN: 'Glass Extension', labelTH: 'ต่อเติมห้องกระจก', prompt: 'RENOVATION: Add a modern glass-box extension to the masked area of the building. Use steel frame and large glass panels. Integrate the new structure seamlessly with the existing architecture and environment.' },
   { id: 'reno_facade', labelEN: 'Facade Redesign', labelTH: 'เปลี่ยนหน้ากากตึก', prompt: 'RENOVATION: Completely redesign the facade of the masked building. Use a contemporary minimalist style with vertical wooden slats and white plaster finishes. Keep the surroundings identical.' },
-  { id: 'reno_retail', labelEN: 'Modern Retail', labelTH: 'ร้านค้าโมเดิร์น', prompt: 'RENOVATION: Transform this old shopfront into a modern flagship retail store architecture, textured raw concrete facade mixed with large floor-to-ceiling glass windows, warm interior lighting glowing from inside, wooden interior furniture visible through glass.' }
+  { id: 'reno_retail', labelEN: 'Modern Retail', labelTH: 'ร้านค้าโมเดิร์น', prompt: 'RENOVATION: Transform this old shopfront into a modern flagship retail store architecture, textured raw concrete facade mixed with large floor-to-ceiling glass windows, warm interior lighting glowing from inside, wooden interior furniture visible through glass.' },
+  { id: 'reno_industrial', labelEN: 'Industrial Luxury', labelTH: 'อินดัสเทรียลหรู', prompt: 'RENOVATION: Transform the building into a modern industrial luxury house. Raw textured concrete facade, weathered wood cladding accents, large black metal-framed glass windows, warm interior lighting glowing from inside, polished concrete entrance path, wabi-sabi aesthetic, overcast sky, soft cinematic lighting, photorealistic, 8k, architectural visualization.' },
+  { id: 'reno_shophouse_minimal', labelEN: 'Minimal Shophouse', labelTH: 'ตึกแถวมินิมอล', prompt: 'RENOVATION: Exterior facade renovation of a two-story shophouse, minimalist modern design, white smooth plaster walls with light oak wood cladding accents, large floor-to-ceiling glass windows with thin black steel frames, clean lines, airy atmosphere, minimalist entrance, modern roof structure, minimalist interior living space with white linen sofas, light wood furniture, indoor plants, and sheer white curtains, bright natural daylight, photorealistic, 8k resolution, architectural photography, clear blue sky background.' }
 ];
 
 const EXTERIOR_SCENES = [
@@ -1565,6 +1568,26 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                  onChange={handleMainFileUpload}
                  onClick={(e) => e.stopPropagation()} 
               />
+
+              {isGenerating && (
+                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-950/80 backdrop-blur-sm transition-all duration-300">
+                     <div className="relative flex flex-col items-center justify-center p-8">
+                        {/* Glowing effect */}
+                        <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full animate-pulse"></div>
+                        
+                        {/* Icon */}
+                        <div className="relative bg-gray-900 p-4 rounded-2xl border border-gray-800 shadow-2xl mb-4">
+                            <Hourglass className="w-8 h-8 text-indigo-400 animate-spin" style={{ animationDuration: '3s' }} />
+                        </div>
+                        
+                        {/* Text */}
+                        <h3 className="text-lg font-bold text-white relative z-10 tracking-wide">{t.generating}</h3>
+                        <p className="text-xs text-gray-400 mt-2 relative z-10 text-center max-w-[200px]">
+                            {language === 'TH' ? 'ระบบกำลังประมวลผล กรุณารอสักครู่...' : 'AI is processing your request...'}
+                        </p>
+                     </div>
+                 </div>
+              )}
               
               {generatedImage ? (
                  <img src={generatedImage} alt="Generated AI Art" className="max-w-full max-h-full object-contain animate-in fade-in zoom-in duration-500 shadow-2xl" />
