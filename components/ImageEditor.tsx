@@ -51,7 +51,18 @@ import {
   Hammer,
   Square,
   Hourglass,
-  Sprout
+  Sprout,
+  PenLine,
+  Eraser,
+  Type as TypeIcon,
+  Move,
+  Minus,
+  Plus,
+  Palette as PaletteIcon,
+  Trees,
+  User as UserIcon,
+  Package,
+  Eraser as EraserIcon
 } from 'lucide-react';
 import { UserData } from '../types';
 import { GoogleGenAI } from "@google/genai";
@@ -68,6 +79,16 @@ interface SessionImage {
   url: string;
   timestamp: string;
   prompt: string;
+}
+
+interface TextOverlay {
+  id: string;
+  text: string;
+  x: number; // percentage 0-100
+  y: number; // percentage 0-100
+  color: string;
+  fontSize: number;
+  fontFamily: string;
 }
 
 // --- IMAGE PROCESSING HELPER ---
@@ -99,10 +120,63 @@ const transformImage = (base64Str: string, type: 'rotate' | 'flip'): Promise<str
     });
 };
 
+const compositeImage = (baseImageStr: string, maskCanvas: HTMLCanvasElement | null, texts: TextOverlay[]): Promise<string> => {
+  return new Promise((resolve) => {
+      const img = new Image();
+      img.src = baseImageStr;
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(baseImageStr); return; }
+
+          // 1. Draw Original Image
+          ctx.drawImage(img, 0, 0);
+
+          // 2. Draw Mask Overlay (Scaled to fit original image)
+          if (maskCanvas) {
+             ctx.drawImage(maskCanvas, 0, 0, maskCanvas.width, maskCanvas.height, 0, 0, img.width, img.height);
+          }
+
+          // 3. Draw Texts
+          if (texts.length > 0) {
+              texts.forEach(t => {
+                  // Calculate actual pixel position from percentage
+                  const x = (t.x / 100) * canvas.width;
+                  const y = (t.y / 100) * canvas.height;
+                  
+                  // Scale font size relative to image width (assuming baseline 1000px width for editor view)
+                  // This ensures text size looks similar on high-res output
+                  const scaleFactor = canvas.width / 800; 
+                  const actualFontSize = t.fontSize * scaleFactor;
+
+                  ctx.font = `bold ${actualFontSize}px "${t.fontFamily}", "Sarabun", sans-serif`;
+                  ctx.fillStyle = t.color;
+                  ctx.textBaseline = 'middle';
+                  ctx.textAlign = 'center'; // Center align for easier positioning
+                  ctx.fillText(t.text, x, y);
+              });
+          }
+
+          resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => resolve(baseImageStr);
+  });
+};
+
 // --- CONSTANTS ---
 const MODEL_PREMIUM = 'gemini-3-pro-image-preview';
 const MODEL_STANDARD = 'gemini-2.5-flash-image';
-const MODEL_ANALYSIS = 'gemini-2.5-flash-image'; // Using Flash for fast vision analysis
+const MODEL_ANALYSIS = 'gemini-2.5-flash-image';
+
+const FONTS = [
+  { id: 'Inter', label: 'Inter (EN)' },
+  { id: 'Sarabun', label: 'Sarabun (TH)' },
+  { id: 'Prompt', label: 'Prompt (TH)' },
+  { id: 'Kanit', label: 'Kanit (TH)' },
+];
 
 const DEFAULT_NEGATIVE_PROMPT = 'low quality, low resolution, blurry, distorted, watermark, text, signature, bad composition, ugly, geometric imperfections, changing background, changing room layout, changing lighting, distortion';
 
@@ -145,44 +219,44 @@ const RENOVATION_SCENES = [
   { id: 'reno_retail', labelEN: 'Modern Retail', labelTH: 'ร้านค้าโมเดิร์น', prompt: 'RENOVATION: Transform this old shopfront into a modern flagship retail store architecture, textured raw concrete facade mixed with large floor-to-ceiling glass windows, warm interior lighting glowing from inside, wooden interior furniture visible through glass.' },
   { id: 'reno_industrial', labelEN: 'Industrial Luxury', labelTH: 'อินดัสเทรียลหรู', prompt: 'RENOVATION: Transform the building into a modern industrial luxury house. Raw textured concrete facade, weathered wood cladding accents, large black metal-framed glass windows, warm interior lighting glowing from inside, polished concrete entrance path, wabi-sabi aesthetic, overcast sky, soft cinematic lighting, photorealistic, 8k, architectural visualization.' },
   { id: 'reno_shophouse_minimal', labelEN: 'Minimal Shophouse', labelTH: 'ตึกแถวมินิมอล', prompt: 'RENOVATION: Exterior facade renovation of a two-story shophouse, minimalist modern design, white smooth plaster walls with light oak wood cladding accents, large floor-to-ceiling glass windows with thin black steel frames, clean lines, airy atmosphere, minimalist entrance, modern roof structure, minimalist interior living space with white linen sofas, light wood furniture, indoor plants, and sheer white curtains, bright natural daylight, photorealistic, 8k resolution, architectural photography, clear blue sky background.' },
-  { id: 'reno_modern_facade_dusk', labelEN: 'Modern Facade Dusk', labelTH: 'หน้ากากตึกยามค่ำ', prompt: 'RENOVATION: A detailed architectural photograph of a modern minimalist house facade at dusk. The design features textured white stucco walls contrasted by a tall, vertical section of black metal slats that houses integrated vertical LED strip lighting, creating a striking light feature. A recessed entrance with a large, dark, flat panel door is illuminated by warm downlights. Large, black-framed aluminum windows are visible on both floors, reflecting the evening sky. A concrete paver walkway leads to the front door. The landscaping is minimal, with only low-lying grasses and no trees, emphasizing the clean geometric lines of the architecture.' },
-  { id: 'reno_vertical_slats', labelEN: 'Vertical Slats House', labelTH: 'บ้านระแนงไฟตั้ง', prompt: 'RENOVATION: A photorealistic architectural visualization of a modern minimalist two-story house facade at dusk. The primary material is textured white stucco, contrasted by a prominent vertical section of black metal slats that runs from the ground to the roofline. Integrated into this black section are two tall, thin vertical LED strip lights casting a warm glow. The entrance is recessed with a large, sleek black pivot door illuminated by warm overhead downlights. Large, black-framed aluminum windows with sheer curtains are visible on both floors. A concrete paver walkway leads to the entrance, flanked by low-lying green grasses and a single tall Italian Cypress tree. The overall aesthetic is clean, geometric, and luxurious with cinematic lighting.' },
-  { id: 'reno_copper_facade', labelEN: 'Modern Copper Facade', labelTH: 'โมเดิร์นระแนงทองแดง', prompt: 'RENOVATION: Transform this building into a detailed architectural photograph of a 2-story modern facade. The design features large textured white concrete panels paired with vertical copper-colored steel slats screening a glass curtain wall. The main entrance is recessed, framed by white concrete and brown wood panels, featuring a large glass door with a transom window. The ground floor interior is visible, showing a bright lobby with modern furniture. A paved walkway leads directly to the entrance. Minimal landscaping with low shrubs and gravel. Clear blue sky during the day, photorealistic 8k.' },
-  { id: 'reno_dark_metal', labelEN: 'Modern Dark Metal', labelTH: 'โมเดิร์นเทาเข้ม', prompt: 'RENOVATION: Detailed architectural photography of a 2-story modern building facade. The upper floors feature dark gray metal panels and vertical fins screening large glass walls. The ground floor entrance is a large recessed niche framed by large white stone slabs and vertical brown wooden slats, featuring double glass doors. A stone paved walkway leads to the entrance. Simple landscaping with low shrubs and gravel instead of a large garden. Emphasis on building material details. Clear blue sky during the day, photorealistic 8k.' },
-  { id: 'reno_office_dusk', labelEN: 'Modern Office Dusk', labelTH: 'ออฟฟิศโมเดิร์นค่ำ', prompt: 'RENOVATION: High-resolution architectural photography, straight frontal view of a modern 3-4 story office building. The facade design combines dark gray metal panels and rhythmic vertical fins with large floor-to-ceiling glass walls reflecting the sky. The main ground floor entrance is a deep recessed niche, clearly clad in contrasting materials like large cream stone slabs and warm brown wooden slats to create a focal point and welcoming feel. Atmosphere is dusk/twilight. Warm orange light glows from inside every floor, revealing interior details like desks and ceiling lights. The foreground is a wide plaza paved with granite or polished concrete. Only 1-2 large geometric concrete planters are placed at the entrance corners with low trimmed shrubs. No large gardens or trees blocking the building. Sky transitions from deep blue to orange at the horizon. Emphasis on sharp textures of metal, glass, wood, and stone. Photorealistic 8k.' },
-  { id: 'reno_luxury_commercial', labelEN: 'Luxury Commercial', labelTH: 'อาคารพาณิชย์หรู', prompt: 'RENOVATION: Straight frontal architectural photography of a 2-story modern luxury commercial building. The facade is designed with cream-colored stone or washed sand aggregate with a refined brick-like pattern. The key feature is three large vertical recessed panels in the wall, containing detailed slats or repetitive 3D geometric patterns, illuminated by hidden warm white LED uplights shining upwards onto the patterns and under the eaves to create beautiful light and shadow dimension. The ground floor features full-height clear glass storefronts revealing luxurious interior decoration and warm lighting. The foreground is a clean, open smooth stone plaza with no gardens or trees obscuring the building. Somber evening sky, premium atmosphere, photorealistic 8k resolution.' }
+  { id: 'reno_modern_facade_dusk', labelEN: 'Modern Facade Dusk', labelTH: 'หน้ากากตึกยามค่ำ', prompt: 'RENOVATION: A detailed architectural photograph of a modern minimalist house facade at dusk. The design features textured white stucco walls contrasted by a prominent vertical section of black metal slats that houses integrated vertical LED strip lighting. A recessed entrance with a large, dark, flat panel door. Large, black-framed aluminum windows.' },
+  { id: 'reno_vertical_slats', labelEN: 'Vertical Slats House', labelTH: 'บ้านระแนงไฟตั้ง', prompt: 'RENOVATION: A photorealistic architectural visualization of a modern minimalist two-story house facade at dusk. The primary material is textured white stucco, contrasted by a prominent vertical section of black metal slats that runs from the ground to the roofline. Integrated into this black section are two tall, thin vertical LED strip lights casting a warm glow. The entrance is recessed with a large, sleek black pivot door illuminated by warm overhead downlights.' },
+  { id: 'reno_copper_facade', labelEN: 'Modern Copper Facade', labelTH: 'โมเดิร์นระแนงทองแดง', prompt: 'RENOVATION: Transform this building into a detailed architectural photograph of a 2-story modern facade. The design features large textured white concrete panels paired with vertical copper-colored steel slats screening a glass curtain wall. The main entrance is recessed, framed by white concrete and brown wood panels.' },
+  { id: 'reno_dark_metal', labelEN: 'Modern Dark Metal', labelTH: 'โมเดิร์นเทาเข้ม', prompt: 'RENOVATION: Detailed architectural photography of a 2-story modern building facade. The upper floors feature dark gray metal panels and vertical fins screening large glass walls. The ground floor entrance is a large recessed niche framed by large white stone slabs and vertical brown wooden slats.' },
+  { id: 'reno_office_dusk', labelEN: 'Modern Office Dusk', labelTH: 'ออฟฟิศโมเดิร์นค่ำ', prompt: 'RENOVATION: High-resolution architectural photography, straight frontal view of a modern 3-4 story office building. The facade design combines dark gray metal panels and rhythmic vertical fins with large floor-to-ceiling glass walls reflecting the sky.' },
+  { id: 'reno_luxury_commercial', labelEN: 'Luxury Commercial', labelTH: 'อาคารพาณิชย์หรู', prompt: 'RENOVATION: Straight frontal architectural photography of a 2-story modern luxury commercial building. The facade is designed with cream-colored stone or washed sand aggregate with a refined brick-like pattern. The key feature is three large vertical recessed panels in the wall, containing detailed slats or repetitive 3D geometric patterns, illuminated by hidden warm white LED uplights.' }
 ];
 
 const LANDSCAPE_SCENES = [
-  { id: 'landscape_lush', labelEN: 'Lush Modern Garden', labelTH: 'สวนโมเดิร์นร่มรื่น', prompt: 'A photorealistic shot of a lush modern landscape garden. The foreground features a manicured rolling green lawn with large natural grey boulders and rounded sculpted shrubs. Tall trees with slender trunks frame the scene, casting dappled sunlight and soft shadows on the grass. In the background, a modern minimalist concrete and glass structure with a dark outdoor sofa on a terrace. Serene atmosphere, high-end architectural photography, natural lighting, depth of field, 8k resolution' },
-  { id: 'landscape_curved_path', labelEN: 'Contemporary Curve', labelTH: 'สวนทางเดินโค้ง', prompt: 'A contemporary landscape garden featuring a winding curved walkway made of two-tone grey and white terrazzo, meandering through lush greenery, flanked by low curved beige concrete retaining walls, diverse planting textures including large-leaf hostas, rosemary bushes, ferns, and horsetail reeds, young trees supported by wooden tripod stakes, modern bollard garden lights, soft overcast daylight, high-angle shot highlighting the fluid path layout, modern building facade in background, photorealistic 8k.' },
-  { id: 'landscape_urban_jungle', labelEN: 'Urban Jungle', labelTH: 'สวนป่ากลางเมือง', prompt: 'A photorealistic shot of an Urban Jungle style front garden, lush and dense greenery. A light grey concrete walkway is flanked by clusters of large-leaved tropical plants arranged in layers, featuring giant Monstera, tall Birds of Paradise, feathery palms, and patterned ground cover like Calathea Zebrina. Dappled natural sunlight filters through, creating a refreshing private forest atmosphere. Dense lush green background. 8k resolution, photorealistic.' },
-  { id: 'landscape_mediterranean', labelEN: 'Modern Mediterranean', labelTH: 'สวนเมดิเตอร์เรเนียน', prompt: 'Luxury modern Mediterranean landscape, grand limestone staircase leading up a terraced garden, flanked by tall Italian Cypress trees and ancient Olive trees with silvery foliage, pathway with grass joints (stepping stones), soft ornamental feather grasses (Stipa) mixed with low boxwood hedges and succulents, warm beige stone retaining walls, modern villa facade with stone cladding on the left, sunny daylight, blue sky, architectural visualization, 8k, photorealistic.' },
-  { id: 'landscape_zen', labelEN: 'Japanese Zen Garden', labelTH: 'สวนญี่ปุ่นเซน', prompt: 'Architectural photography of a tranquil Japanese zen courtyard garden. The ground is covered in white raked gravel with intricate wave patterns, interspersed with lush green moss islands and large natural boulders. A large, sculptural Japanese maple tree with vibrant green leaves is the centerpiece, alongside manicured pine bonsai. Features include a granite water basin (tsukubai) with a bamboo spout, and a low stone table with a traditional tea set. The backdrop is a minimalist modern house with expansive floor-to-ceiling glass sliding doors and white walls. Soft, diffused natural daylight, serene atmosphere, 8k resolution.' },
-  { id: 'landscape_modern_mix', labelEN: 'Modern Mixed Garden', labelTH: 'สวนหินผสมดอกไม้', prompt: 'A photorealistic view of the modern two-story house with its white and grey siding, dark tiled roof, and black framed windows and doors. The plain ground in front is now beautifully landscaped with the natural garden scene. Large, tan landscape boulders are nestled among clusters of vibrant purple lavender, white alyssum, and feathery ornamental grasses. A winding path of irregular flagstone pavers and crushed gravel leads towards the house entrance. The garden extends across the foreground and sides, integrating with the base of the house and porch. The clear blue sky remains above.' },
-  { id: 'landscape_step_lighting', labelEN: 'Modern Step Lighting', labelTH: 'สวนบันไดไฟซ่อน', prompt: 'A dramatic evening view of a modern landscaped garden staircase. Wide, curving floating concrete steps are illuminated by warm integrated LED strip lighting underneath each tread. The path is flanked by manicured, rounded boxwood topiary balls of various sizes and large, smooth, dark grey spherical stone sculptures. Multi-stemmed trees with light-colored bark are uplighted, casting shadows. A tall, textured black feature wall and a dense green wall form the background. Serene, luxurious atmosphere, architectural photography, 8k.' },
-  { id: 'landscape_tropical_patio', labelEN: 'Modern Tropical Patio', labelTH: 'ลานพักผ่อนทรอปิคอล', prompt: 'Luxury modern tropical garden patio, outdoor living space. Flooring design mixes dark grey cobblestone pavers with rectangular concrete stepping stones set in black river pebbles. Teak wood lounge chairs with grey cushions and a wooden serving trolley. Manicured round boxwood shrubs and low ground cover plants. A large sculptural tree with artistic twisting branches provides shade. Black bowl-shaped fire pits, garden bollard lights, modern house glass facade in background, warm evening atmosphere, architectural photography, 8k.' },
-  { id: 'landscape_modern_minimal', labelEN: 'Modern Minimal Garden', labelTH: 'สวนโมเดิร์นมินิมอล', prompt: 'Wide-angle photorealistic shot of a modern minimalist front garden. Bright and airy atmosphere. A curved pathway featuring large circular washed sandstone pavers placed on vibrant green Japanese lawn, contrasting with dark grey gravel borders. The garden design incorporates drought-tolerant and sculptural plants including agave, tall cacti, fluffy ornamental grasses, and airy trees casting light shadows. In the background, a white modern box-shaped house features golden-brown wooden soffits and large clear glass walls. Sunny day with bright natural light, clear blue sky with wispy clouds. Modern, clean, and warm aesthetic, 8k resolution.' },
-  { id: 'landscape_waterfall', labelEN: 'Natural Waterfall', labelTH: 'สวนน้ำตกธรรมชาติ', prompt: 'Photorealistic naturalistic landscape garden featuring a refined tiered waterfall constructed from stacked natural stone slabs, water flowing gently down into a lower pond. Decorated with large boulders and round river pebbles along the water\'s edge. Interspersed with lush greenery of varied textures including ornamental grasses, ferns, and small purple flowering shrubs creating a humid feel. On the left, a modern house terrace structure with wood accents and clear glass railings connects the living space to nature. Natural sunlight filters through foliage, creating sparkling glints on the water surface. Serene and relaxing luxury resort atmosphere, 8k resolution.' }
+  { id: 'landscape_lush', labelEN: 'Lush Modern Garden', labelTH: 'สวนโมเดิร์นร่มรื่น', prompt: 'A photorealistic shot of a lush modern landscape garden. The foreground features a manicured rolling green lawn with large natural grey boulders and rounded sculpted shrubs. Tall trees with slender trunks frame the scene, casting dappled sunlight.' },
+  { id: 'landscape_curved_path', labelEN: 'Contemporary Curve', labelTH: 'สวนทางเดินโค้ง', prompt: 'A contemporary landscape garden featuring a winding curved walkway made of two-tone grey and white terrazzo, meandering through lush greenery, flanked by low curved beige concrete retaining walls, diverse planting textures.' },
+  { id: 'landscape_urban_jungle', labelEN: 'Urban Jungle', labelTH: 'สวนป่ากลางเมือง', prompt: 'A photorealistic shot of an Urban Jungle style front garden, lush and dense greenery. A light grey concrete walkway is flanked by clusters of large-leaved tropical plants arranged in layers, featuring giant Monstera, tall Birds of Paradise.' },
+  { id: 'landscape_mediterranean', labelEN: 'Modern Mediterranean', labelTH: 'สวนเมดิเตอร์เรเนียน', prompt: 'Luxury modern Mediterranean landscape, grand limestone staircase leading up a terraced garden, flanked by tall Italian Cypress trees and ancient Olive trees with silvery foliage.' },
+  { id: 'landscape_zen', labelEN: 'Japanese Zen Garden', labelTH: 'สวนญี่ปุ่นเซน', prompt: 'Architectural photography of a tranquil Japanese zen courtyard garden. The ground is covered in white raked gravel with intricate wave patterns, interspersed with lush green moss islands and large natural boulders. A large, sculptural Japanese maple tree.' },
+  { id: 'landscape_modern_mix', labelEN: 'Modern Mixed Garden', labelTH: 'สวนหินผสมดอกไม้', prompt: 'A photorealistic view of the modern two-story house with its white and grey siding, dark tiled roof, and black framed windows and doors. The plain ground in front is now beautifully landscaped with the natural garden scene.' },
+  { id: 'landscape_step_lighting', labelEN: 'Modern Step Lighting', labelTH: 'สวนบันไดไฟซ่อน', prompt: 'A dramatic evening view of a modern landscaped garden staircase. Wide, curving floating concrete steps are illuminated by warm integrated LED strip lighting underneath each tread. The path is flanked by manicured, rounded boxwood topiary balls.' },
+  { id: 'landscape_tropical_patio', labelEN: 'Modern Tropical Patio', labelTH: 'ลานพักผ่อนทรอปิคอล', prompt: 'Luxury modern tropical garden patio, outdoor living space. Flooring design mixes dark grey cobblestone pavers with rectangular concrete stepping stones set in black river pebbles. Teak wood lounge chairs.' },
+  { id: 'landscape_modern_minimal', labelEN: 'Modern Minimal Garden', labelTH: 'สวนโมเดิร์นมินิมอล', prompt: 'Wide-angle photorealistic shot of a modern minimalist front garden. Bright and airy atmosphere. A curved pathway featuring large circular washed sandstone pavers placed on vibrant green Japanese lawn.' },
+  { id: 'landscape_waterfall', labelEN: 'Natural Waterfall', labelTH: 'สวนน้ำตกธรรมชาติ', prompt: 'Photorealistic naturalistic landscape garden featuring a refined tiered waterfall constructed from stacked natural stone slabs, water flowing gently down into a lower pond. Decorated with large boulders.' }
 ];
 
 const EXTERIOR_SCENES = [
-  { id: 'pool_villa', labelEN: 'Pool Villa', labelTH: 'พูลวิลล่า', prompt: 'A wide-angle architectural photograph of a luxurious modern minimalist building, viewed from the far end of its backyard under a bright clear blue sky. Two-story structure, clean white cubic forms, large glass windows. A long rectangular swimming pool with clear turquoise water runs parallel to the building. Manicured green lawn, paved walkway, wooden sun loungers. Mature palm trees and tropical plants, resort-like atmosphere. Bright midday sunlight casting sharp shadows.' },
-  { id: 'housing', labelEN: 'Housing Estate 1', labelTH: 'บ้านจัดสรร 1', prompt: 'A vibrant, modern housing estate scene. Features large, majestic transplanted trees with wooden supports (tree crutches) lining the streets and gardens, characteristic of new luxury developments. Lush, deep green manicured lawns. The architecture is modern and fresh. Clean, wide concrete or asphalt roads with no clutter. Bright, sunny atmosphere with blue sky. 8k resolution, highly detailed real estate photography.' },
-  { id: 'housing_2', labelEN: 'Modern Housing 2', labelTH: 'บ้านจัดสรร 2', prompt: 'A realistic Thai housing estate atmosphere in bright daytime sunlight. Strictly preserve the original camera angle. Features a concrete or asphalt road in the foreground. The house fence is a mix of green hedges and black iron railings. Includes typical Thai electric poles and power lines along the road. Shady trees providing a natural and livable look. Authentic Thai suburban style. 8k resolution, photorealistic.' },
-  { id: 'housing_3', labelEN: 'Luxury Mansion', labelTH: 'บ้านจัดสรร 3', prompt: 'A magnificent luxury mansion situated in an ultra-high-end exclusive housing estate. The architecture is grand and imposing. The property is surrounded by tall, perfectly trimmed manicured hedge fences providing privacy and elegance. The foreground features a very wide, clean, spacious paved road or boulevard, emphasizing grandeur. The overall atmosphere is expensive, orderly, prestigious, and pristine. Bright natural daylight, professional real estate photography, 8k resolution.' },
-  { id: 'housing_4', labelEN: 'Modern Housing 4', labelTH: 'บ้านจัดสรร 4', prompt: 'A lively and vibrant modern Thai housing estate. The most prominent feature is the newly planted large trees with wooden props/crutches (ไม้ค้ำยัน) supporting them, typical of new landscaping. The lawns are lush green and perfectly manicured. The village streets are clean and wide. The atmosphere is sunny, fresh, and inviting. Modern architectural style. 8k resolution, photorealistic.' },
-  { id: 'european', labelEN: 'Euro Garden', labelTH: 'บ้านยุโรปสวนดัด', prompt: 'A grand architectural photograph situated in an opulent formal French garden estate. A long, elegant light-beige cobblestone paved driveway leads centrally towards the structure. Foreground dominated by perfectly manicured geometric boxwood hedges, low-trimmed garden mazes, and symmetrical cone-shaped cypress trees. Lush vibrant green lawns. Dramatic sky with textured clouds. Soft diffused natural daylight. High-end real estate photography.' },
-  { id: 'green_walkway', labelEN: 'Green Walkway', labelTH: 'ทางเดินสวนป่า', prompt: 'A photorealistic architectural photograph nestled in a lush, mature woodland garden. A winding light-grey flagstone pathway leads from the foreground gate towards the building, flanked by manicured green lawns and rice fields. Bright clear natural sunlight, high contrast, vivid colors, bird\'s eye view perspective.' },
-  { id: 'rice_paddy', labelEN: 'Rice Field', labelTH: 'ทุ่งนามุมสูง', prompt: 'A stunning architectural photograph situated in the middle of vast, vibrant green rice paddy fields. Background features a majestic layering mountain range under a bright blue sky. A long straight paved concrete driveway leads from the foreground gate towards the building, flanked by manicured green lawns and rice fields. Bright clear natural sunlight, high contrast, vivid colors, bird\'s eye view perspective.' },
-  { id: 'lake_mountain', labelEN: 'Lake Mountain', labelTH: 'ทะเลสาบภูเขา', prompt: 'High-angle bird\'s eye perspective. Bright warm sunlight with sharp shadows. Vibrant blue sky with fluffy white clouds. Rugged mountainous terrain with snow-capped peaks in the distance, forested slopes. A large, reflective deep blue lake in the foreground or middle ground. Meticulously landscaped hillside with green lawns, stone pathways, and a clear blue swimming pool nearby.' },
-  { id: 'resort_dusk', labelEN: 'Resort Dusk', labelTH: 'รีสอร์ทยามค่ำ', prompt: 'High-resolution photograph of a resort or residential area at dusk/twilight. Blue-grey sky with wispy clouds. Meticulously designed gardens, lush greenery, large shade trees, pines, shrubs, and colorful flowers. Concrete or stone walkways winding through the garden. Water features or swimming pool reflecting the sky. Asphalt or concrete internal roads with garden lights and warm building lights creating a cozy atmosphere.' },
-  { id: 'hillside', labelEN: 'Hillside', labelTH: 'บ้านบนเขา', prompt: 'Vibrant mountain landscape teeming with lush green forests and expansive meadows under a bright cloud-dotted sky. A collection of structures arranged across the hillside. Modern tropical elements with thatch or flat roofs, stone, and wood. Features infinity pools, terraces, wooden walkways, and pavilions. Diverse vegetation and natural setting.' },
-  { id: 'lake_front', labelEN: 'Lake Front', labelTH: 'ริมทะเลสาบ', prompt: '8K landscape photograph. Peaceful and fresh waterfront atmosphere. Foreground is a large still lake acting as a mirror reflecting the sky and landscape. Green manicured lawns along the bank, interspersed with gravel and natural stone paths. Background of lush rainforest and large mountains. Soft lighting, scattered clouds. The building sits harmoniously with nature.' },
-  { id: 'green_reflection', labelEN: 'Green Reflection', labelTH: 'เงาสะท้อนน้ำ', prompt: 'High-resolution landscape photograph emphasizing tranquility. Foreground is a fresh green lawn, manicured and smooth, leading to the edge of a large lake. Still water surface reflecting the surroundings perfectly. Background of towering mountains covered in dense green rainforest. Big trees framing the water. Diffused soft morning light. The building is placed harmoniously in this setting.' },
-  { id: 'khaoyai_1', labelEN: 'Khao Yai 1', labelTH: 'เขาใหญ่ 1', prompt: 'Modern two-story house with distinctive design. Exterior walls mix exposed concrete and black structure with wooden slats. Large floor-to-ceiling glass windows. Located amidst lush natural landscape. Background is a dense forest mountain range. Foreground features a reflecting pool, wide smooth lawn, and flower garden. Morning natural sunlight, peaceful and luxurious.' },
-  { id: 'khaoyai_2', labelEN: 'Khao Yai 2', labelTH: 'เขาใหญ่ 2', prompt: 'Modern resort style built of stone and wood, nestled in lush greenery. Tranquil atmosphere. Wide lawn bordered by white and purple flowering plants. A pool reflecting the building. Large trees including mango trees providing shade. Forested mountain backdrop. Afternoon sunlight bathing the scene in a relaxing ambiance.' },
-  { id: 'twilight_pool', labelEN: 'Twilight Pool', labelTH: 'สระน้ำพลบค่ำ', prompt: 'Cinematic, photorealistic architectural landscape at twilight (Blue Hour). Foreground features a sleek dark-tiled swimming pool with mirror-like reflections. Wooden deck, built-in lounge seating, dining area. Illuminated by cozy warm golden floor lanterns and interior lights contrasting with the deep blue sky. Lush green hillside background.' }
+  { id: 'pool_villa', labelEN: 'Pool Villa', labelTH: 'พูลวิลล่า', prompt: 'A wide-angle architectural photograph of a luxurious modern minimalist building, viewed from the far end of its backyard under a bright clear blue sky. Two-story structure, clean white cubic forms, large glass windows. A long rectangular swimming pool.' },
+  { id: 'housing', labelEN: 'Housing Estate 1', labelTH: 'บ้านจัดสรร 1', prompt: 'A vibrant, modern housing estate scene. Features large, majestic transplanted trees with wooden supports (tree crutches) lining the streets and gardens. Lush, deep green manicured lawns.' },
+  { id: 'housing_2', labelEN: 'Modern Housing 2', labelTH: 'บ้านจัดสรร 2', prompt: 'A realistic Thai housing estate atmosphere in bright daytime sunlight. Strictly preserve the original camera angle. Features a concrete or asphalt road in the foreground. The house fence is a mix of green hedges and black iron railings.' },
+  { id: 'housing_3', labelEN: 'Luxury Mansion', labelTH: 'บ้านจัดสรร 3', prompt: 'A magnificent luxury mansion situated in an ultra-high-end exclusive housing estate. The architecture is grand and imposing. The property is surrounded by tall, perfectly trimmed manicured hedge fences providing privacy and elegance.' },
+  { id: 'housing_4', labelEN: 'Modern Housing 4', labelTH: 'บ้านจัดสรร 4', prompt: 'A lively and vibrant modern Thai housing estate. The most prominent feature is the newly planted large trees with wooden props/crutches (ไม้ค้ำยัน) supporting them.' },
+  { id: 'european', labelEN: 'Euro Garden', labelTH: 'บ้านยุโรปสวนดัด', prompt: 'A grand architectural photograph situated in an opulent formal French garden estate. A long, elegant light-beige cobblestone paved driveway leads centrally towards the structure. Foreground dominated by perfectly manicured geometric boxwood hedges.' },
+  { id: 'green_walkway', labelEN: 'Green Walkway', labelTH: 'ทางเดินสวนป่า', prompt: 'A photorealistic architectural photograph nestled in a lush, mature woodland garden. A winding light-grey flagstone pathway leads from the foreground gate towards the building, flanked by manicured green lawns and rice fields.' },
+  { id: 'rice_paddy', labelEN: 'Rice Field', labelTH: 'ทุ่งนามุมสูง', prompt: 'A stunning architectural photograph situated in the middle of vast, vibrant green rice paddy fields. Background features a majestic layering mountain range under a bright blue sky.' },
+  { id: 'lake_mountain', labelEN: 'Lake Mountain', labelTH: 'ทะเลสาบภูเขา', prompt: 'High-angle bird\'s eye perspective. Bright warm sunlight with sharp shadows. Vibrant blue sky with fluffy white clouds. Rugged mountainous terrain with snow-capped peaks in the distance, forested slopes. A large, reflective deep blue lake.' },
+  { id: 'resort_dusk', labelEN: 'Resort Dusk', labelTH: 'รีสอร์ทยามค่ำ', prompt: 'High-resolution photograph of a resort or residential area at dusk/twilight. Blue-grey sky with wispy clouds. Meticulously designed gardens, lush greenery, large shade trees, pines, shrubs, and colorful flowers.' },
+  { id: 'hillside', labelEN: 'Hillside', labelTH: 'บ้านบนเขา', prompt: 'Vibrant mountain landscape teeming with lush green forests and expansive meadows under a bright cloud-dotted sky. A collection of structures arranged across the hillside. Modern tropical elements with thatch or flat roofs.' },
+  { id: 'lake_front', labelEN: 'Lake Front', labelTH: 'ริมทะเลสาบ', prompt: '8K landscape photograph. Peaceful and fresh waterfront atmosphere. Foreground is a large still lake acting as a mirror reflecting the sky and landscape. Green manicured lawns along the bank.' },
+  { id: 'green_reflection', labelEN: 'Green Reflection', labelTH: 'เงาสะท้อนน้ำ', prompt: 'High-resolution landscape photograph emphasizing tranquility. Foreground is a fresh green lawn, manicured and smooth, leading to the edge of a large lake. Still water surface reflecting the surroundings perfectly.' },
+  { id: 'khaoyai_1', labelEN: 'Khao Yai 1', labelTH: 'เขาใหญ่ 1', prompt: 'Modern two-story house with distinctive design. Exterior walls mix exposed concrete and black structure with wooden slats. Large floor-to-ceiling glass windows. Located amidst lush natural landscape. Background is a dense forest mountain range.' },
+  { id: 'khaoyai_2', labelEN: 'Khao Yai 2', labelTH: 'เขาใหญ่ 2', prompt: 'Modern resort style built of stone and wood, nestled in lush greenery. Tranquil atmosphere. Wide lawn bordered by white and purple flowering plants. A pool reflecting the building.' },
+  { id: 'twilight_pool', labelEN: 'Twilight Pool', labelTH: 'สระน้ำพลบค่ำ', prompt: 'Cinematic, photorealistic architectural landscape at twilight (Blue Hour). Foreground features a sleek dark-tiled swimming pool with mirror-like reflections. Wooden deck, built-in lounge seating, dining area.' }
 ];
 
 const ARCH_STYLE_PROMPTS: Record<string, string> = {
@@ -274,7 +348,21 @@ const TEXTS = {
     proModeLabel: 'Pro Mode',
     noHistory: 'No history yet',
     analyzePlan: 'Read Plan',
-    analyzing: 'Reading...'
+    analyzing: 'Reading...',
+    penTool: 'Highlighter',
+    eraserTool: 'Eraser',
+    brushSize: 'Brush Size',
+    clearMask: 'Clear Mask',
+    textTool: 'Text Tool',
+    addText: 'Add Text',
+    deleteText: 'Delete',
+    typeHere: 'Type here...',
+    magicEdit: 'Magic Edit (Highlight Area)',
+    addTree: '+ Tree',
+    addPerson: '+ Person',
+    addObject: '+ Object',
+    changeMat: 'Change Mat.',
+    removeObj: 'Remove Object'
   },
   TH: {
     exterior: 'ภายนอก',
@@ -328,7 +416,21 @@ const TEXTS = {
     proModeLabel: 'โหมดโปร',
     noHistory: 'ยังไม่มีประวัติการสร้าง',
     analyzePlan: 'อ่านแปลนอัจฉริยะ',
-    analyzing: 'กำลังอ่าน...'
+    analyzing: 'กำลังอ่าน...',
+    penTool: 'ปากกาไฮไลท์',
+    eraserTool: 'ยางลบ',
+    brushSize: 'ขนาด',
+    clearMask: 'ล้างไฮไลท์',
+    textTool: 'ข้อความ',
+    addText: 'เพิ่มข้อความ',
+    deleteText: 'ลบ',
+    typeHere: 'พิมพ์ข้อความ...',
+    magicEdit: 'แก้ไขเฉพาะจุด (ระบายสีแดง)',
+    addTree: '+ ต้นไม้',
+    addPerson: '+ คน',
+    addObject: '+ วัตถุ',
+    changeMat: 'เปลี่ยนวัสดุ',
+    removeObj: 'ลบวัตถุ'
   }
 };
 
@@ -379,6 +481,21 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
   const [errorMsg, setErrorMsg] = useState('');
   const [warningMsg, setWarningMsg] = useState('');
 
+  // Drawing / Masking State
+  const [isDrawMode, setIsDrawMode] = useState(false);
+  const [isEraser, setIsEraser] = useState(false);
+  const [brushSize, setBrushSize] = useState(20);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasMask, setHasMask] = useState(false); // Track if mask exists
+  const maskCanvasRef = useRef<HTMLCanvasElement>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+
+  // Text Overlay State
+  const [isTextMode, setIsTextMode] = useState(false);
+  const [texts, setTexts] = useState<TextOverlay[]>([]);
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+  const [isDraggingText, setIsDraggingText] = useState(false);
+
   // Settings State (Local Storage)
   const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('user_custom_api_key') || '');
 
@@ -414,11 +531,64 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
     return () => unsub();
   }, [user]);
 
+  // Handle Resize of Canvas to match Image
+  useEffect(() => {
+      const resizeCanvas = () => {
+          if (imageContainerRef.current && maskCanvasRef.current) {
+              const container = imageContainerRef.current;
+              // We need to find the actual IMG element inside to match its dimensions
+              // Note: We prioritize the generated image if present, or fallback to mainImage
+              const img = container.querySelector('img');
+              if (img) {
+                  // Wait for image to load to get dimensions (or if already loaded)
+                  const setDims = () => {
+                      if (maskCanvasRef.current) {
+                          // Match the internal resolution to the display size
+                          maskCanvasRef.current.width = img.clientWidth;
+                          maskCanvasRef.current.height = img.clientHeight;
+                          
+                          // Match position EXACTLY to the image element
+                          // The container is relative, so offsetLeft/Top works perfectly to align with the image
+                          maskCanvasRef.current.style.top = `${img.offsetTop}px`;
+                          maskCanvasRef.current.style.left = `${img.offsetLeft}px`;
+                          maskCanvasRef.current.style.width = `${img.clientWidth}px`;
+                          maskCanvasRef.current.style.height = `${img.clientHeight}px`;
+                      }
+                  };
+                  if (img.complete) setDims();
+                  else img.onload = setDims;
+              }
+          }
+      };
+
+      window.addEventListener('resize', resizeCanvas);
+      // Also trigger when main image or generated image changes
+      resizeCanvas(); 
+      // Delay slightly to allow rendering
+      const t = setTimeout(resizeCanvas, 100);
+
+      return () => {
+          window.removeEventListener('resize', resizeCanvas);
+          clearTimeout(t);
+      };
+  }, [mainImage, generatedImage, isDrawMode, isTextMode]);
+
   // Save custom key to local storage
   const handleSaveCustomKey = () => {
       localStorage.setItem('user_custom_api_key', customApiKey);
       setShowSettings(false);
   };
+
+  // Keyboard Event for Deleting Text
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if ((e.key === 'Delete' || e.key === 'Backspace') && selectedTextId && !isDrawMode) {
+              handleDeleteText(selectedTextId);
+          }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedTextId, isDrawMode]);
 
   // --- HISTORY HELPERS ---
   const addToHistory = (image: string) => {
@@ -443,6 +613,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       addToHistory(item.url);
       setWarningMsg('Loaded from History Backup');
       setTimeout(() => setWarningMsg(''), 3000);
+      handleClearMask(); // Clear mask when loading new image
   };
 
   const clearHistory = () => {
@@ -470,12 +641,17 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
   };
 
   const handleMainUploadClick = () => {
+    // If in draw mode or text mode, clicking shouldn't trigger upload unless empty
+    if ((isDrawMode || isTextMode) && (generatedImage || mainImage)) return;
+
     if (mainImage) {
       setMainImage(null);
       if (!generatedImage) {
           clearHistory();
       }
       if (mainFileInputRef.current) mainFileInputRef.current.value = '';
+      handleClearMask();
+      setTexts([]); // Clear texts
     } else {
       mainFileInputRef.current?.click();
     }
@@ -492,9 +668,131 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
           setGeneratedImage(null);
           setHistory([res]);
           setHistoryStep(0);
+          handleClearMask();
+          setTexts([]);
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  // DRAWING HANDLERS
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+      if (!isDrawMode) return;
+      const canvas = maskCanvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      setIsDrawing(true);
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = ('touches' in e) ? e.touches[0].clientX - rect.left : (e as React.MouseEvent).clientX - rect.left;
+      const y = ('touches' in e) ? e.touches[0].clientY - rect.top : (e as React.MouseEvent).clientY - rect.top;
+
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = brushSize;
+      
+      if (isEraser) {
+          ctx.globalCompositeOperation = 'destination-out';
+      } else {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)'; // Semi-transparent Red Highlight
+      }
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+      if (!isDrawing || !isDrawMode) return;
+      const canvas = maskCanvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = ('touches' in e) ? e.touches[0].clientX - rect.left : (e as React.MouseEvent).clientX - rect.left;
+      const y = ('touches' in e) ? e.touches[0].clientY - rect.top : (e as React.MouseEvent).clientY - rect.top;
+
+      ctx.lineTo(x, y);
+      ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+      setIsDrawing(false);
+      const canvas = maskCanvasRef.current;
+      if (canvas) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.closePath();
+          // Check if mask has content to update state
+          // Simple heuristic: if we were drawing, assume there is content unless fully erased
+          // For now, let's just set hasMask to true if we drew something (not erasing)
+          // Or just set to true generally, user can clear it.
+          setHasMask(true);
+      }
+  };
+
+  const handleClearMask = () => {
+      const canvas = maskCanvasRef.current;
+      if (canvas) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+          setHasMask(false);
+      }
+  };
+
+  // TEXT HANDLERS
+  const handleAddText = () => {
+      const newText: TextOverlay = {
+          id: Date.now().toString(),
+          text: '', // Empty string by default
+          x: 50,
+          y: 50,
+          color: '#000000', // Changed to black
+          fontSize: 60,
+          fontFamily: 'Sarabun'
+      };
+      setTexts([...texts, newText]);
+      setSelectedTextId(newText.id);
+  };
+
+  const handleUpdateText = (id: string, updates: Partial<TextOverlay>) => {
+      setTexts(texts.map(t => t.id === id ? { ...t, ...updates } : t));
+  };
+
+  const handleDeleteText = (id: string) => {
+      setTexts(texts.filter(t => t.id !== id));
+      setSelectedTextId(null);
+  };
+
+  const handleCanvasClickForText = (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isTextMode || selectedTextId || isDraggingText) return;
+      
+      // If clicking on background while text mode is on, add text at that position
+      if (imageContainerRef.current) {
+          const rect = imageContainerRef.current.querySelector('img')?.getBoundingClientRect();
+          if (rect) {
+              const xPercent = ((e.clientX - rect.left) / rect.width) * 100;
+              const yPercent = ((e.clientY - rect.top) / rect.height) * 100;
+              
+              // Bound check
+              if (xPercent >= 0 && xPercent <= 100 && yPercent >= 0 && yPercent <= 100) {
+                   const newText: TextOverlay = {
+                      id: Date.now().toString(),
+                      text: '', // Empty string by default
+                      x: xPercent,
+                      y: yPercent,
+                      color: '#000000', // Changed to black
+                      fontSize: 60,
+                      fontFamily: 'Sarabun'
+                  };
+                  setTexts([...texts, newText]);
+                  setSelectedTextId(newText.id);
+              }
+          }
+      }
   };
 
   // Check if admin quota is available
@@ -705,6 +1003,28 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
           // use the previous result as the input for continuous editing.
           activeInputImage = generatedImage;
       }
+
+      // ------------------------------------------------------------------
+      // MASK COMPOSITING LOGIC
+      // ------------------------------------------------------------------
+      
+      // Check if mask canvas has content
+      if (maskCanvasRef.current) {
+         const ctx = maskCanvasRef.current.getContext('2d');
+         // Simple check: check if any pixel is not transparent
+         // A more optimized way is to assume if isDrawMode was ever used
+         // But here we can just check if user drew anything.
+         // For now, let's rely on if activeInputImage exists and we are in Edit mode
+         // We will try to blend the mask.
+         if (activeInputImage && hasMask) {
+            // Merge Mask + Image + Text (but AI generation usually ignores text overlay for structure)
+            // Actually, for AI generation, we usually only care about the RED mask for inpainting.
+            // We do NOT want to bake the Text Overlay into the input image for the AI, 
+            // unless we want the AI to read the text.
+            // For this feature (Highlighter), we composite the mask.
+            activeInputImage = await compositeImage(activeInputImage, maskCanvasRef.current, []);
+         }
+      }
     
       // 3. Validation
       if (activeTab === 'exterior' && !prompt && !selectedArchStyle && !selectedScene && !activeInputImage && !refImage) {
@@ -864,6 +1184,13 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                   }
               }
           }
+
+          // SPECIAL INSTRUCTION FOR MASK
+          if (hasMask) {
+              fullPrompt += `\n[VISUAL CUE INSTRUCTION]:\n`;
+              fullPrompt += `The input image contains a RED HIGHLIGHTED area. This visual cue indicates the specific region you must edit.\n`;
+              fullPrompt += `ACTION: Apply the changes ONLY to the area highlighted in RED. Keep the rest of the image exactly as is. Remove the red highlighter in the final output.`;
+          }
       } else {
           if (additionalCommand) {
               fullPrompt += `Additional details: ${additionalCommand}. `;
@@ -927,6 +1254,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                   addToHistory(newImg);
                   addToSessionHistory(newImg, additionalCommand || prompt || 'Generated Image'); // Add to Session Backup
                   foundImage = true;
+                  handleClearMask(); // Clear mask after successful generation
+                  setIsDrawMode(false); // Exit draw mode
                   
                   // SUCCESS: Deduct Quota ONLY if using Premium and NOT custom key and NOT admin
                   if (shouldUsePremium && !customApiKey && currentUserData?.id !== 'admin') {
@@ -975,6 +1304,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
     if (refFileInputRef.current) refFileInputRef.current.value = '';
     setErrorMsg('');
     setWarningMsg('');
+    handleClearMask();
+    setTexts([]);
   };
 
   const handleUseAsInput = () => {
@@ -982,13 +1313,18 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
       setMainImage(generatedImage);
       setGeneratedImage(null);
       if (mainFileInputRef.current) mainFileInputRef.current.value = '';
+      handleClearMask();
     }
   };
 
-  const handleDownload = () => {
-    if (generatedImage) {
+  const handleDownload = async () => {
+    const activeImage = generatedImage || mainImage;
+    if (activeImage) {
+      // Use composite helper to burn text into image
+      const finalImage = await compositeImage(activeImage, null, texts); // Mask is already in image if generated, if not, we skip mask drawing for download (unless visual cue is desired)
+      
       const link = document.createElement('a');
-      link.href = generatedImage;
+      link.href = finalImage;
       link.download = `generated-ai-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
@@ -1062,6 +1398,18 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
   };
 
   const planName = getPlanName(quota);
+
+  // Helper to get selected text object
+  const selectedText = texts.find(t => t.id === selectedTextId);
+
+  // Helper to fill command
+  const appendCommand = (cmd: string) => {
+      setAdditionalCommand(cmd);
+      // Automatically switch to draw mode if no mask
+      if (!hasMask && !isDrawMode && (mainImage || generatedImage)) {
+          setIsDrawMode(true);
+      }
+  };
 
   return (
     <div className="h-screen w-full flex flex-col bg-gray-950 text-gray-200 font-sans overflow-hidden">
@@ -1301,6 +1649,27 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                   className="w-full h-16 bg-gray-950 border border-gray-700 rounded-xl p-3 text-sm text-gray-200 placeholder-gray-700 resize-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 outline-none transition-all"
                   placeholder={language === 'EN' ? "e.g., Make it night time, Add a red car..." : "เช่น เปลี่ยนเป็นกลางคืน, เติมรถสีแดง..."}
                 />
+                
+                {/* Magic Edit Buttons */}
+                <div className="space-y-1.5 mt-2 bg-gray-950/50 p-2 rounded-xl border border-dashed border-gray-800">
+                    <label className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1 mb-1">
+                        <Wand2 className="w-3 h-3" /> {t.magicEdit}
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <button onClick={() => appendCommand(language === 'TH' ? "เพิ่มต้นไม้สมจริงในพื้นที่ที่ระบาย" : "Add realistic trees in highlighted area")} className="flex items-center justify-center gap-1 bg-gray-900 hover:bg-emerald-900/30 text-gray-400 hover:text-emerald-400 text-[10px] py-1.5 rounded-lg border border-gray-800 hover:border-emerald-500/50 transition-all">
+                            <Trees className="w-3 h-3" /> {t.addTree}
+                        </button>
+                        <button onClick={() => appendCommand(language === 'TH' ? "เพิ่มคนกำลังเดินในพื้นที่ที่ระบาย" : "Add people walking in highlighted area")} className="flex items-center justify-center gap-1 bg-gray-900 hover:bg-orange-900/30 text-gray-400 hover:text-orange-400 text-[10px] py-1.5 rounded-lg border border-gray-800 hover:border-orange-500/50 transition-all">
+                            <UserIcon className="w-3 h-3" /> {t.addPerson}
+                        </button>
+                        <button onClick={() => appendCommand(language === 'TH' ? "เพิ่มเฟอร์นิเจอร์/วัตถุในพื้นที่ที่ระบาย" : "Add furniture/object in highlighted area")} className="flex items-center justify-center gap-1 bg-gray-900 hover:bg-blue-900/30 text-gray-400 hover:text-blue-400 text-[10px] py-1.5 rounded-lg border border-gray-800 hover:border-blue-500/50 transition-all">
+                            <Package className="w-3 h-3" /> {t.addObject}
+                        </button>
+                        <button onClick={() => appendCommand(language === 'TH' ? "เปลี่ยนวัสดุพื้นผิวในพื้นที่ที่ระบาย" : "Change material in highlighted area")} className="flex items-center justify-center gap-1 bg-gray-900 hover:bg-purple-900/30 text-gray-400 hover:text-purple-400 text-[10px] py-1.5 rounded-lg border border-gray-800 hover:border-purple-500/50 transition-all">
+                            <PaletteIcon className="w-3 h-3" /> {t.changeMat}
+                        </button>
+                    </div>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -1570,8 +1939,15 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
             />
             
             <div 
-              onClick={() => !generatedImage && handleMainUploadClick()}
-              className={`relative z-10 w-full h-full flex flex-col items-center justify-center text-gray-700 group transition-all duration-300 shadow-2xl backdrop-blur-sm overflow-hidden border-2 border-dashed ${!generatedImage ? 'cursor-pointer border-gray-800 hover:border-gray-600 hover:bg-gray-900/50 rounded-2xl' : 'border-transparent bg-transparent'}`}
+              onClick={(e) => {
+                  if (isTextMode && !selectedTextId && !isDraggingText) {
+                      handleCanvasClickForText(e as any);
+                  } else if (!generatedImage && !isTextMode && !isDrawMode) {
+                      handleMainUploadClick();
+                  }
+              }}
+              ref={imageContainerRef}
+              className={`relative z-10 w-full h-full flex flex-col items-center justify-center text-gray-700 group transition-all duration-300 shadow-2xl backdrop-blur-sm overflow-hidden border-2 border-dashed ${!generatedImage && !mainImage ? 'cursor-pointer border-gray-800 hover:border-gray-600 hover:bg-gray-900/50 rounded-2xl' : 'border-transparent bg-transparent'}`}
             >
               <input 
                  ref={mainFileInputRef}
@@ -1581,6 +1957,98 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                  onChange={handleMainFileUpload}
                  onClick={(e) => e.stopPropagation()} 
               />
+
+              {/* CANVAS LAYER (Visual Highlighter) */}
+              {(mainImage || generatedImage) && (
+                <canvas
+                    ref={maskCanvasRef}
+                    className={`absolute z-30 touch-none transition-opacity duration-200 ${(isDrawMode || hasMask) ? 'opacity-100' : 'opacity-0'} ${isDrawMode ? 'cursor-crosshair pointer-events-auto' : 'pointer-events-none'}`}
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseLeave={stopDrawing}
+                    onTouchStart={startDrawing}
+                    onTouchMove={draw}
+                    onTouchEnd={stopDrawing}
+                />
+              )}
+
+              {/* TEXT OVERLAY LAYER */}
+              {(mainImage || generatedImage) && texts.map((t) => (
+                  <div
+                      key={t.id}
+                      className={`absolute z-40 cursor-move select-none group/text ${selectedTextId === t.id ? 'ring-2 ring-indigo-500 rounded p-1' : ''}`}
+                      style={{
+                          left: `${t.x}%`,
+                          top: `${t.y}%`,
+                          transform: 'translate(-50%, -50%)',
+                          display: isDrawMode ? 'none' : 'block' // Hide text while drawing mask
+                      }}
+                      onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setSelectedTextId(t.id);
+                          setIsDraggingText(true);
+                          
+                          // Simple Drag Logic
+                          const startX = e.clientX;
+                          const startY = e.clientY;
+                          const startLeft = t.x;
+                          const startTop = t.y;
+                          const rect = imageContainerRef.current?.querySelector('img')?.getBoundingClientRect();
+                          if (!rect) return;
+
+                          const onMouseMove = (moveEvent: MouseEvent) => {
+                              const dx = moveEvent.clientX - startX;
+                              const dy = moveEvent.clientY - startY;
+                              const deltaXPercent = (dx / rect.width) * 100;
+                              const deltaYPercent = (dy / rect.height) * 100;
+                              
+                              handleUpdateText(t.id, {
+                                  x: Math.max(0, Math.min(100, startLeft + deltaXPercent)),
+                                  y: Math.max(0, Math.min(100, startTop + deltaYPercent))
+                              });
+                          };
+                          const onMouseUp = () => {
+                              setIsDraggingText(false);
+                              window.removeEventListener('mousemove', onMouseMove);
+                              window.removeEventListener('mouseup', onMouseUp);
+                          };
+                          window.addEventListener('mousemove', onMouseMove);
+                          window.addEventListener('mouseup', onMouseUp);
+                      }}
+                  >
+                      {selectedTextId === t.id ? (
+                          <input 
+                              type="text"
+                              value={t.text}
+                              onChange={(e) => handleUpdateText(t.id, { text: e.target.value })}
+                              className="bg-transparent border-none outline-none text-center min-w-[50px] p-0 m-0 w-auto whitespace-pre placeholder-gray-400"
+                              style={{ 
+                                  color: t.color, 
+                                  fontSize: `${t.fontSize}px`, 
+                                  fontWeight: 'bold', 
+                                  fontFamily: `"${t.fontFamily}", "Sarabun", sans-serif`,
+                                  textShadow: '0 2px 4px rgba(255,255,255,0.5)'
+                              }}
+                              autoFocus
+                              placeholder={t.typeHere}
+                              onBlur={() => { /* Do not deselect on blur immediately to allow clicking tools */ }}
+                          />
+                      ) : (
+                          <span 
+                            style={{ 
+                                color: t.color, 
+                                fontSize: `${t.fontSize}px`, 
+                                fontWeight: 'bold', 
+                                fontFamily: `"${t.fontFamily}", "Sarabun", sans-serif`,
+                                textShadow: '0 2px 4px rgba(255,255,255,0.5)'
+                            }}
+                          >
+                              {t.text || (isTextMode ? '' : '')}
+                          </span>
+                      )}
+                  </div>
+              ))}
 
               {isGenerating && (
                  <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-950/80 backdrop-blur-sm transition-all duration-300">
@@ -1607,14 +2075,16 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
               ) : mainImage ? (
                  <div className="relative w-full h-full flex items-center justify-center">
                     <img src={mainImage} alt="Main Subject" className="max-w-full max-h-full object-contain" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
-                       <div className="flex flex-col items-center gap-2 text-white">
-                          <div className="bg-red-500/80 p-3 rounded-full backdrop-blur-sm shadow-lg transform scale-90 group-hover:scale-100 transition-transform cursor-pointer" onClick={(e) => { e.stopPropagation(); setMainImage(null); if(mainFileInputRef.current) mainFileInputRef.current.value = ''; }}>
-                             <Trash2 className="w-6 h-6" />
-                          </div>
-                          <p className="text-sm font-medium drop-shadow-md">Click to Remove Main Image</p>
-                       </div>
-                    </div>
+                    {!isDrawMode && !isTextMode && (
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20 pointer-events-none">
+                            <div className="flex flex-col items-center gap-2 text-white pointer-events-auto">
+                                <div className="bg-red-500/80 p-3 rounded-full backdrop-blur-sm shadow-lg transform scale-90 group-hover:scale-100 transition-transform cursor-pointer" onClick={(e) => { e.stopPropagation(); setMainImage(null); if(mainFileInputRef.current) mainFileInputRef.current.value = ''; handleClearMask(); }}>
+                                    <Trash2 className="w-6 h-6" />
+                                </div>
+                                <p className="text-sm font-medium drop-shadow-md">Click to Remove Main Image</p>
+                            </div>
+                        </div>
+                    )}
                     <div className="absolute top-4 left-4 bg-indigo-600/80 backdrop-blur text-white text-[10px] font-bold px-3 py-1 rounded-full border border-indigo-400/30 shadow-lg z-10">MAIN IMAGE</div>
                  </div>
               ) : (
@@ -1637,27 +2107,192 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
           </div>
 
           <div className="h-20 bg-gray-900 border-t border-gray-800 px-8 flex items-center justify-center relative z-20 shrink-0">
-             <div className="flex items-center gap-2 bg-gray-800/80 backdrop-blur-md p-2 rounded-2xl border border-gray-700/50 shadow-xl">
-                <ToolButton icon={Upload} tooltip={language === 'TH' ? 'อัพโหลดรูป' : 'Upload Image'} onClick={() => mainFileInputRef.current?.click()} />
-                <div className="w-px h-6 bg-gray-700 mx-1"></div>
-                <ToolButton icon={Undo2} tooltip={t.undo} onClick={handleUndo} disabled={historyStep <= 0} />
-                <ToolButton icon={Redo2} tooltip={t.redo} onClick={handleRedo} disabled={historyStep >= history.length - 1} />
-                <div className="w-px h-6 bg-gray-700 mx-1"></div>
-                <ToolButton icon={FlipHorizontal} tooltip={t.flip} onClick={handleFlip} disabled={!generatedImage && !mainImage} />
-                <ToolButton icon={RotateCw} tooltip={t.rotate} onClick={handleRotate} disabled={!generatedImage && !mainImage} />
-                <div className="w-px h-6 bg-gray-700 mx-1"></div>
-                <ToolButton icon={ArrowUp} tooltip={t.useAsInput} onClick={handleUseAsInput} disabled={!generatedImage} />
-                <ToolButton icon={RefreshCcw} tooltip={t.reset} onClick={handleReset} />
-                <div className="w-px h-6 bg-transparent mx-2"></div>
-                <button 
-                  onClick={handleDownload}
-                  disabled={!generatedImage}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Download className="w-4 h-4" />
-                  {t.download}
-                </button>
-             </div>
+             {/* Main Tool Bar */}
+             {!isDrawMode && !isTextMode ? (
+                 <div className="flex items-center gap-2 bg-gray-800/80 backdrop-blur-md p-2 rounded-2xl border border-gray-700/50 shadow-xl">
+                    <ToolButton icon={Upload} tooltip={language === 'TH' ? 'อัพโหลดรูป' : 'Upload Image'} onClick={() => mainFileInputRef.current?.click()} />
+                    
+                    {/* Highlighter & Text Tools - Only visible if there is an image */}
+                    {(mainImage || generatedImage) && (
+                        <>
+                            <ToolButton 
+                                icon={PenLine} 
+                                tooltip={t.penTool} 
+                                onClick={() => {
+                                    setIsDrawMode(true);
+                                    setIsTextMode(false);
+                                    setIsEraser(false);
+                                }} 
+                            />
+                            <ToolButton 
+                                icon={TypeIcon} 
+                                tooltip={t.textTool} 
+                                onClick={() => {
+                                    setIsTextMode(true);
+                                    setIsDrawMode(false);
+                                    if(texts.length === 0) handleAddText();
+                                }} 
+                            />
+                        </>
+                    )}
+                    
+                    <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                    <ToolButton icon={Undo2} tooltip={t.undo} onClick={handleUndo} disabled={historyStep <= 0} />
+                    <ToolButton icon={Redo2} tooltip={t.redo} onClick={handleRedo} disabled={historyStep >= history.length - 1} />
+                    <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                    <ToolButton icon={FlipHorizontal} tooltip={t.flip} onClick={handleFlip} disabled={!generatedImage && !mainImage} />
+                    <ToolButton icon={RotateCw} tooltip={t.rotate} onClick={handleRotate} disabled={!generatedImage && !mainImage} />
+                    <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                    <ToolButton icon={ArrowUp} tooltip={t.useAsInput} onClick={handleUseAsInput} disabled={!generatedImage} />
+                    <ToolButton icon={RefreshCcw} tooltip={t.reset} onClick={handleReset} />
+                    <div className="w-px h-6 bg-transparent mx-2"></div>
+                    <button 
+                    onClick={handleDownload}
+                    disabled={!generatedImage && !mainImage}
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                    <Download className="w-4 h-4" />
+                    {t.download}
+                    </button>
+                 </div>
+             ) : isDrawMode ? (
+                 // Draw Mode Tool Bar
+                 <div className="flex items-center gap-2 bg-gray-800/80 backdrop-blur-md p-2 rounded-2xl border border-gray-700/50 shadow-xl animate-in slide-in-from-bottom-2">
+                     <div className="flex items-center gap-2 px-2">
+                         <ToolButton 
+                             icon={PenLine} 
+                             tooltip={t.penTool} 
+                             onClick={() => setIsEraser(false)} 
+                             active={!isEraser}
+                         />
+                         <ToolButton 
+                             icon={EraserIcon} 
+                             tooltip={t.eraserTool} 
+                             onClick={() => setIsEraser(true)} 
+                             active={isEraser}
+                         />
+                     </div>
+                     <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                     
+                     <div className="flex items-center gap-2 px-2">
+                         <span className="text-[10px] text-gray-400 font-bold uppercase">{t.brushSize}</span>
+                         <input 
+                             type="range" 
+                             min="5" 
+                             max="100" 
+                             value={brushSize} 
+                             onChange={(e) => setBrushSize(Number(e.target.value))}
+                             className="w-24 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                         />
+                         <span className="text-[10px] w-6 text-center">{brushSize}</span>
+                     </div>
+                     
+                     <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                     
+                     <button 
+                         onClick={handleClearMask}
+                         className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                     >
+                         <Trash2 className="w-3.5 h-3.5" />
+                         {t.clearMask}
+                     </button>
+                     
+                     <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                     
+                     <button 
+                         onClick={() => setIsDrawMode(false)}
+                         className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg"
+                     >
+                         <Check className="w-3.5 h-3.5" />
+                         Done
+                     </button>
+                 </div>
+             ) : (
+                // Text Mode Tool Bar
+                <div className="flex items-center gap-3 bg-gray-800/80 backdrop-blur-md p-2 rounded-2xl border border-gray-700/50 shadow-xl animate-in slide-in-from-bottom-2">
+                     
+                     {selectedTextId && selectedText ? (
+                         // Selected Text Properties
+                         <>
+                            <div className="flex items-center gap-2 border-r border-gray-700 pr-3">
+                                <select 
+                                    value={selectedText.fontFamily}
+                                    onChange={(e) => handleUpdateText(selectedTextId, { fontFamily: e.target.value })}
+                                    className="bg-gray-900 border border-gray-700 rounded-lg text-xs text-white h-8 px-2 outline-none focus:border-indigo-500 cursor-pointer"
+                                >
+                                    {FONTS.map(f => (
+                                        <option key={f.id} value={f.id}>{f.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="flex items-center gap-2 border-r border-gray-700 pr-3">
+                                <button onClick={() => handleUpdateText(selectedTextId, { fontSize: Math.max(10, selectedText.fontSize - 5) })} className="p-1 hover:bg-gray-700 rounded text-gray-400"><Minus className="w-3 h-3" /></button>
+                                <input 
+                                    type="range"
+                                    min="10" 
+                                    max="200" 
+                                    value={selectedText.fontSize} 
+                                    onChange={(e) => handleUpdateText(selectedTextId, { fontSize: Number(e.target.value) })}
+                                    className="w-20 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                                />
+                                <button onClick={() => handleUpdateText(selectedTextId, { fontSize: Math.min(200, selectedText.fontSize + 5) })} className="p-1 hover:bg-gray-700 rounded text-gray-400"><Plus className="w-3 h-3" /></button>
+                                <span className="text-[10px] w-6 text-center">{selectedText.fontSize}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 border-r border-gray-700 pr-3">
+                                <div className="relative w-6 h-6 rounded-full overflow-hidden border border-gray-600 cursor-pointer">
+                                    <input 
+                                        type="color" 
+                                        value={selectedText.color} 
+                                        onChange={(e) => handleUpdateText(selectedTextId, { color: e.target.value })} 
+                                        className="absolute -top-2 -left-2 w-12 h-12 cursor-pointer p-0 border-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={() => handleDeleteText(selectedTextId)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                                title="Delete (Del)"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                {t.deleteText}
+                            </button>
+                         </>
+                     ) : (
+                         // Default Text Tools
+                         <div className="flex items-center gap-2 px-2">
+                             <ToolButton 
+                                 icon={TypeIcon} 
+                                 tooltip={t.textTool} 
+                                 active={true}
+                                 onClick={() => {}}
+                             />
+                             <button 
+                                 onClick={handleAddText}
+                                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-indigo-300 hover:text-white hover:bg-indigo-500/20 rounded-lg transition-colors border border-indigo-500/30"
+                             >
+                                 <Move className="w-3.5 h-3.5" />
+                                 {t.addText}
+                             </button>
+                         </div>
+                     )}
+
+                     <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                     
+                     <button 
+                         onClick={() => {
+                             setIsTextMode(false);
+                             setSelectedTextId(null);
+                         }}
+                         className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg"
+                     >
+                         <Check className="w-3.5 h-3.5" />
+                         Done
+                     </button>
+                 </div>
+             )}
           </div>
         </main>
       </div>
@@ -1665,11 +2300,15 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
   );
 };
 
-const ToolButton: React.FC<{ icon: React.ElementType, tooltip: string, onClick?: () => void, disabled?: boolean }> = ({ icon: Icon, tooltip, onClick, disabled }) => (
+const ToolButton: React.FC<{ icon: React.ElementType, tooltip: string, onClick?: () => void, disabled?: boolean, active?: boolean }> = ({ icon: Icon, tooltip, onClick, disabled, active }) => (
   <button 
     onClick={onClick}
     disabled={disabled}
-    className={`p-2.5 rounded-xl transition-all relative group ${disabled ? 'text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-gray-700 active:scale-90'}`}
+    className={`p-2.5 rounded-xl transition-all relative group ${
+        disabled ? 'text-gray-600 cursor-not-allowed' : 
+        active ? 'bg-indigo-600 text-white shadow-md' :
+        'text-gray-400 hover:text-white hover:bg-gray-700 active:scale-90'
+    }`}
     title={tooltip}
   >
     <Icon className="w-5 h-5" />
