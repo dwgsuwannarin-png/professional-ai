@@ -62,7 +62,9 @@ import {
   Trees,
   User as UserIcon,
   Package,
-  Eraser as EraserIcon
+  Eraser as EraserIcon,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { UserData } from '../types';
 import { GoogleGenAI } from "@google/genai";
@@ -495,6 +497,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
   const [texts, setTexts] = useState<TextOverlay[]>([]);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [isDraggingText, setIsDraggingText] = useState(false);
+  const [isMagicEditOpen, setIsMagicEditOpen] = useState(false);
 
   // Settings State (Local Storage)
   const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('user_custom_api_key') || '');
@@ -1650,25 +1653,39 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ user, onLogout, onBack
                   placeholder={language === 'EN' ? "e.g., Make it night time, Add a red car..." : "เช่น เปลี่ยนเป็นกลางคืน, เติมรถสีแดง..."}
                 />
                 
-                {/* Magic Edit Buttons */}
-                <div className="space-y-1.5 mt-2 bg-gray-950/50 p-2 rounded-xl border border-dashed border-gray-800">
-                    <label className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1 mb-1">
-                        <Wand2 className="w-3 h-3" /> {t.magicEdit}
-                    </label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                        <button onClick={() => appendCommand(language === 'TH' ? "เพิ่มต้นไม้สมจริงในพื้นที่ที่ระบาย" : "Add realistic trees in highlighted area")} className="flex items-center justify-center gap-1 bg-gray-900 hover:bg-emerald-900/30 text-gray-400 hover:text-emerald-400 text-[10px] py-1.5 rounded-lg border border-gray-800 hover:border-emerald-500/50 transition-all">
-                            <Trees className="w-3 h-3" /> {t.addTree}
-                        </button>
-                        <button onClick={() => appendCommand(language === 'TH' ? "เพิ่มคนกำลังเดินในพื้นที่ที่ระบาย" : "Add people walking in highlighted area")} className="flex items-center justify-center gap-1 bg-gray-900 hover:bg-orange-900/30 text-gray-400 hover:text-orange-400 text-[10px] py-1.5 rounded-lg border border-gray-800 hover:border-orange-500/50 transition-all">
-                            <UserIcon className="w-3 h-3" /> {t.addPerson}
-                        </button>
-                        <button onClick={() => appendCommand(language === 'TH' ? "เพิ่มเฟอร์นิเจอร์/วัตถุในพื้นที่ที่ระบาย" : "Add furniture/object in highlighted area")} className="flex items-center justify-center gap-1 bg-gray-900 hover:bg-blue-900/30 text-gray-400 hover:text-blue-400 text-[10px] py-1.5 rounded-lg border border-gray-800 hover:border-blue-500/50 transition-all">
-                            <Package className="w-3 h-3" /> {t.addObject}
-                        </button>
-                        <button onClick={() => appendCommand(language === 'TH' ? "เปลี่ยนวัสดุพื้นผิวในพื้นที่ที่ระบาย" : "Change material in highlighted area")} className="flex items-center justify-center gap-1 bg-gray-900 hover:bg-purple-900/30 text-gray-400 hover:text-purple-400 text-[10px] py-1.5 rounded-lg border border-gray-800 hover:border-purple-500/50 transition-all">
-                            <PaletteIcon className="w-3 h-3" /> {t.changeMat}
-                        </button>
-                    </div>
+                {/* Magic Edit Buttons (Collapsible) */}
+                <div className="mt-2 bg-gray-950/50 rounded-xl border border-dashed border-gray-800 overflow-hidden transition-all duration-300">
+                    <button 
+                        onClick={() => setIsMagicEditOpen(!isMagicEditOpen)}
+                        className="w-full flex items-center justify-between p-2.5 hover:bg-gray-900/50 transition-colors group"
+                    >
+                        <div className="flex items-center gap-2">
+                            <div className="p-1 rounded bg-indigo-500/10 group-hover:bg-indigo-500/20 transition-colors">
+                                <Wand2 className="w-3.5 h-3.5 text-indigo-400" />
+                            </div>
+                            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest group-hover:text-indigo-300">
+                                {t.magicEdit}
+                            </span>
+                        </div>
+                        {isMagicEditOpen ? <ChevronDown className="w-3.5 h-3.5 text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-500" />}
+                    </button>
+                    
+                    {isMagicEditOpen && (
+                        <div className="px-2 pb-2 grid grid-cols-2 gap-1.5 animate-in slide-in-from-top-2 fade-in duration-200">
+                            <button onClick={() => appendCommand(language === 'TH' ? "เพิ่มต้นไม้สมจริงในพื้นที่ที่ระบาย" : "Add realistic trees in highlighted area")} className="flex items-center justify-center gap-1.5 bg-gray-900 hover:bg-emerald-900/30 text-gray-400 hover:text-emerald-400 text-[10px] py-2 rounded-lg border border-gray-800 hover:border-emerald-500/50 transition-all">
+                                <Trees className="w-3 h-3" /> {t.addTree}
+                            </button>
+                            <button onClick={() => appendCommand(language === 'TH' ? "เพิ่มคนกำลังเดินในพื้นที่ที่ระบาย" : "Add people walking in highlighted area")} className="flex items-center justify-center gap-1.5 bg-gray-900 hover:bg-orange-900/30 text-gray-400 hover:text-orange-400 text-[10px] py-2 rounded-lg border border-gray-800 hover:border-orange-500/50 transition-all">
+                                <UserIcon className="w-3 h-3" /> {t.addPerson}
+                            </button>
+                            <button onClick={() => appendCommand(language === 'TH' ? "เพิ่มเฟอร์นิเจอร์/วัตถุในพื้นที่ที่ระบาย" : "Add furniture/object in highlighted area")} className="flex items-center justify-center gap-1.5 bg-gray-900 hover:bg-blue-900/30 text-gray-400 hover:text-blue-400 text-[10px] py-2 rounded-lg border border-gray-800 hover:border-blue-500/50 transition-all">
+                                <Package className="w-3 h-3" /> {t.addObject}
+                            </button>
+                            <button onClick={() => appendCommand(language === 'TH' ? "เปลี่ยนวัสดุพื้นผิวในพื้นที่ที่ระบาย" : "Change material in highlighted area")} className="flex items-center justify-center gap-1.5 bg-gray-900 hover:bg-purple-900/30 text-gray-400 hover:text-purple-400 text-[10px] py-2 rounded-lg border border-gray-800 hover:border-purple-500/50 transition-all">
+                                <PaletteIcon className="w-3 h-3" /> {t.changeMat}
+                            </button>
+                        </div>
+                    )}
                 </div>
               </div>
 
